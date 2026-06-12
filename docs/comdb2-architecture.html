@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comdb2 Architecture</title>
+<style>
+/* ===== DESIGN SYSTEM ===== */
+:root {
+  --bg: #f8fafb;
+  --bg-top: rgba(37, 99, 235, 0.02);
+  --card: #ffffff;
+  --card-footer: #f9fafb;
+  --bdr: #e5e9f0;
+  --text: #2d3748;
+  --dim: #8896a7;
+  --bright: #111827;
+  --shadow-card: 0 2px 4px rgba(0,0,0,.02), 0 12px 28px rgba(0,0,0,.045), 0 28px 64px rgba(0,0,0,.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 4px 12px rgba(0,0,0,.03);
+  --code-bg: #f0f4f8;
+  --code-c: #5046e5;
+  --blue: #2563eb; --bluel: rgba(37,99,235,.06); --blueg: rgba(37,99,235,.22);
+  --cyan: #0891b2; --cyanl: rgba(8,145,178,.06); --cyang: rgba(8,145,178,.22);
+  --purple: #7c3aed; --purplel: rgba(124,58,237,.06); --purpleg: rgba(124,58,237,.22);
+  --amber: #d97706; --amberl: rgba(217,119,6,.06); --amberg: rgba(217,119,6,.22);
+  --red: #dc2626; --redl: rgba(220,38,38,.06); --redg: rgba(220,38,38,.22);
+  --green: #16a34a; --greenl: rgba(22,163,74,.06); --greeng: rgba(22,163,74,.22);
+  --teal: #0d9488; --teall: rgba(13,148,136,.06); --tealg: rgba(13,148,136,.22);
+  --pink: #db2777; --pinkl: rgba(219,39,119,.06); --pinkg: rgba(219,39,119,.22);
+  --indigo: #4f46e5; --indigol: rgba(79,70,229,.06); --indigog: rgba(79,70,229,.22);
+
+  --svg-client-fill: rgba(37,99,235,.06);
+  --svg-client-stroke: rgba(37,99,235,.35);
+  --svg-server-fill: rgba(124,58,237,.03);
+  --svg-server-stroke: rgba(124,58,237,.2);
+  --svg-box-fill: var(--card);
+  --svg-box-stroke: var(--bdr);
+  --svg-arrow: var(--dim);
+  --svg-label: var(--dim);
+  --svg-text: var(--bright);
+  --svg-subtext: var(--text);
+}
+
+:root.dark {
+  --bg: #0b1222;
+  --bg-top: rgba(59, 130, 246, 0.03);
+  --card: #14202f;
+  --card-footer: #111c2b;
+  --bdr: #1e3050;
+  --text: #c4d0dc;
+  --dim: #607080;
+  --bright: #ecf2f8;
+  --shadow-card: 0 2px 4px rgba(0,0,0,.2), 0 12px 28px rgba(0,0,0,.25), 0 28px 64px rgba(0,0,0,.2);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.2);
+  --code-bg: rgba(80, 70, 229, .12);
+  --code-c: #a5b4fc;
+  --blue: #3b82f6; --bluel: rgba(59,130,246,.1); --blueg: rgba(59,130,246,.3);
+  --cyan: #06b6d4; --cyanl: rgba(6,182,212,.1); --cyang: rgba(6,182,212,.3);
+  --purple: #a855f7; --purplel: rgba(168,85,247,.1); --purpleg: rgba(168,85,247,.3);
+  --amber: #f59e0b; --amberl: rgba(245,158,11,.1); --amberg: rgba(245,158,11,.3);
+  --red: #ef4444; --redl: rgba(239,68,68,.1); --redg: rgba(239,68,68,.3);
+  --green: #22c55e; --greenl: rgba(34,197,94,.1); --greeng: rgba(34,197,94,.3);
+  --teal: #14b8a6; --teall: rgba(20,184,166,.1); --tealg: rgba(20,184,166,.3);
+  --pink: #ec4899; --pinkl: rgba(236,72,153,.1); --pinkg: rgba(236,72,153,.3);
+  --indigo: #818cf8; --indigol: rgba(129,140,248,.1); --indigog: rgba(129,140,248,.3);
+
+  --svg-client-fill: rgba(59,130,246,.08);
+  --svg-client-stroke: rgba(59,130,246,.3);
+  --svg-server-fill: rgba(168,85,247,.05);
+  --svg-server-stroke: rgba(168,85,247,.2);
+  --svg-box-fill: #182435;
+  --svg-box-stroke: #243552;
+  --svg-arrow: #506070;
+  --svg-label: #607080;
+  --svg-text: #ecf2f8;
+  --svg-subtext: #a0b0c0;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background .3s, color .3s;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 500px;
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, var(--bg-top), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+code {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  background: var(--code-bg);
+  color: var(--code-c);
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: .84em;
+  font-weight: 500;
+}
+
+.hdr {
+  text-align: center;
+  padding: 48px 24px 14px;
+  position: relative;
+  z-index: 1;
+}
+.hdr h1 {
+  font-size: 2rem;
+  color: var(--bright);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+.hdr h1 em { color: var(--blue); font-style: normal; }
+.hdr .sub {
+  color: var(--dim);
+  font-size: .9em;
+  margin-top: 8px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+.tbtn {
+  position: absolute;
+  top: 40px;
+  right: 28px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--bdr);
+  background: var(--card);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15em;
+  color: var(--text);
+  transition: all .2s cubic-bezier(.4,0,.2,1);
+  box-shadow: var(--shadow-sm);
+}
+.tbtn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm), 0 4px 12px var(--blueg);
+}
+
+/* ===== TRACE CONTROLS ===== */
+.trace-bar {
+  max-width: 960px;
+  margin: 16px auto 0;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  position: relative;
+  z-index: 1;
+}
+.trace-label {
+  font-size: .76em;
+  font-weight: 600;
+  color: var(--dim);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.trace-btn {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  color: var(--text);
+  padding: 7px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: .78em;
+  font-family: inherit;
+  font-weight: 600;
+  transition: all .2s cubic-bezier(.4,0,.2,1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--shadow-sm);
+}
+.trace-btn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--bluel);
+  transform: translateY(-1px);
+}
+.trace-btn.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--blueg);
+}
+.trace-btn.stop {
+  border-color: var(--red);
+  color: var(--red);
+}
+.trace-btn.stop:hover {
+  background: var(--redl);
+  border-color: var(--red);
+  color: var(--red);
+}
+.trace-progress {
+  font-size: .72em;
+  color: var(--dim);
+  font-weight: 500;
+  min-width: 80px;
+}
+
+/* ===== MAIN CONTAINER ===== */
+.main-container {
+  max-width: 1400px;
+  margin: 14px auto 0;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+  min-height: 80vh;
+}
+
+/* ===== DIAGRAM ===== */
+.diagram-wrap {
+  position: relative;
+}
+.diagram-card {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  padding: 28px 20px 20px;
+  overflow: hidden;
+}
+
+.arch-box {
+  cursor: pointer;
+  transition: all .25s cubic-bezier(.4,0,.2,1);
+}
+.arch-box:hover rect {
+  filter: brightness(1.02);
+  stroke-width: 2;
+}
+.arch-box.active rect {
+  stroke-width: 2.5;
+}
+.arch-box.glow {
+  animation: trace-pulse 1s ease-in-out infinite;
+}
+.arch-box.glow rect {
+  stroke-width: 3;
+}
+@keyframes trace-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .7; }
+}
+
+/* Per-color glow filters applied via data attribute during trace */
+.arch-box.glow[data-color="blue"] rect { filter: drop-shadow(0 0 12px rgba(37,99,235,.6)); stroke: var(--blue); }
+.arch-box.glow[data-color="cyan"] rect { filter: drop-shadow(0 0 12px rgba(8,145,178,.6)); stroke: var(--cyan); }
+.arch-box.glow[data-color="purple"] rect { filter: drop-shadow(0 0 12px rgba(124,58,237,.6)); stroke: var(--purple); }
+.arch-box.glow[data-color="amber"] rect { filter: drop-shadow(0 0 12px rgba(217,119,6,.6)); stroke: var(--amber); }
+.arch-box.glow[data-color="red"] rect { filter: drop-shadow(0 0 12px rgba(220,38,38,.6)); stroke: var(--red); }
+.arch-box.glow[data-color="green"] rect { filter: drop-shadow(0 0 12px rgba(22,163,74,.6)); stroke: var(--green); }
+.arch-box.glow[data-color="teal"] rect { filter: drop-shadow(0 0 12px rgba(13,148,136,.6)); stroke: var(--teal); }
+.arch-box.glow[data-color="pink"] rect { filter: drop-shadow(0 0 12px rgba(219,39,119,.6)); stroke: var(--pink); }
+.arch-box.glow[data-color="indigo"] rect { filter: drop-shadow(0 0 12px rgba(79,70,229,.6)); stroke: var(--indigo); }
+.arch-box.glow[data-color="dim"] rect { filter: drop-shadow(0 0 12px rgba(136,150,167,.6)); }
+
+.path-flash {
+  animation: path-pulse 1.2s ease-in-out infinite;
+}
+@keyframes path-pulse {
+  0%, 100% { stroke-width: 1.5; opacity: 0.7; }
+  50% { stroke-width: 2.5; opacity: 1; filter: drop-shadow(0 0 6px rgba(13,148,136,.8)); }
+}
+
+#read-path-visual.animate,
+#write-path-visual.animate {
+  stroke-dashoffset: 0 !important;
+}
+
+/* ===== TOOLTIP ===== */
+.tooltip {
+  position: fixed;
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  padding: 8px 14px;
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity .15s;
+  max-width: 260px;
+}
+.tooltip.show { opacity: 1; }
+.tooltip-title {
+  font-size: .82em;
+  font-weight: 700;
+  color: var(--bright);
+  margin-bottom: 2px;
+}
+.tooltip-desc {
+  font-size: .74em;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* ===== DETAIL PANEL ===== */
+.detail-wrap {
+  position: sticky;
+  top: 14px;
+  height: fit-content;
+  max-height: calc(100vh - 28px);
+}
+.detail-panel {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  transition: all .3s cubic-bezier(.4,0,.2,1);
+}
+.detail-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.detail-top {
+  position: relative;
+  height: 3px;
+  transition: background .3s;
+}
+.detail-body {
+  padding: 28px 20px 32px;
+  overflow-y: auto;
+  flex: 1;
+  font-size: .9em;
+}
+.detail-phase {
+  font-size: .67em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 4px 12px;
+  border-radius: 6px;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+.detail-body h2 {
+  font-size: 1.4em;
+  color: var(--bright);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  line-height: 1.3;
+}
+.detail-body p {
+  font-size: .93em;
+  line-height: 1.8;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.detail-body p:last-child { margin-bottom: 0; }
+.detail-body .callout {
+  margin: 18px 0 8px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  font-size: .93em;
+  line-height: 1.7;
+  border-left: 3.5px solid var(--accent, var(--blue));
+  background: var(--accentl, var(--bluel));
+}
+.detail-body .callout strong { color: var(--accent, var(--blue)); }
+
+footer {
+  text-align: center;
+  padding: 28px 24px 36px;
+  font-size: .74em;
+  color: var(--dim);
+  max-width: 960px;
+  margin: 20px auto 0;
+  position: relative;
+  z-index: 1;
+}
+footer a { color: var(--blue); text-decoration: none; font-weight: 500; }
+footer a:hover { text-decoration: underline; }
+.keys { margin-bottom: 8px; font-weight: 500; }
+.keys kbd {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-family: inherit;
+  font-size: .92em;
+  margin: 0 2px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+/* ===== MOBILE DRAWER ===== */
+.detail-drawer {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 70vh;
+  background: var(--card);
+  border-radius: 16px 16px 0 0;
+  box-shadow: var(--shadow-card);
+  z-index: 200;
+  overflow: hidden;
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+  transform: translateY(100%);
+  display: flex;
+  flex-direction: column;
+}
+.detail-drawer.show {
+  transform: translateY(0);
+}
+.detail-drawer-handle {
+  display: none;
+  width: 40px;
+  height: 4px;
+  background: var(--bdr);
+  border-radius: 2px;
+  margin: 12px auto 8px;
+  cursor: grab;
+}
+.detail-drawer-handle:active { cursor: grabbing; }
+.detail-drawer-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 16px 20px 20px;
+  font-size: .9em;
+}
+.detail-drawer-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: var(--card);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2em;
+  color: var(--dim);
+  transition: all .2s;
+  z-index: 10;
+}
+.detail-drawer-close:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+@media (max-width: 1024px) {
+  .main-container {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    gap: 0;
+  }
+  .detail-wrap {
+    position: static;
+    display: none;
+  }
+  .detail-drawer {
+    display: flex;
+  }
+  .detail-drawer-handle {
+    display: block;
+  }
+}
+
+@media (max-width: 640px) {
+  .hdr { padding: 36px 16px 10px; }
+  .hdr h1 { font-size: 1.4em; }
+  .tbtn { top: 28px; right: 14px; width: 34px; height: 34px; border-radius: 10px; }
+  .diagram-wrap, .trace-bar { padding: 0 12px; }
+  .main-container { padding: 0 12px; }
+  .diagram-card { padding: 16px 8px 12px; border-radius: 14px; }
+  .trace-bar { flex-wrap: wrap; gap: 6px; }
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1><em>Comdb2</em> Architecture</h1>
+  <p class="sub">Interactive component diagram &mdash; click any box to explore</p>
+  <button class="tbtn" onclick="toggleTheme()" id="tbtn" title="Toggle theme">&#9790;</button>
+</div>
+
+<div class="trace-bar">
+  <span class="trace-label">Trace:</span>
+  <button class="trace-btn" id="trace-read" onclick="startTrace('read')">&#9654; Read Path</button>
+  <button class="trace-btn" id="trace-write" onclick="startTrace('write')">&#9654; Write Path</button>
+  <button class="trace-btn stop" id="trace-stop" onclick="stopTrace()" style="display:none">&#9724; Stop</button>
+  <span class="trace-progress" id="trace-progress"></span>
+</div>
+
+<div class="main-container">
+<div class="diagram-wrap">
+<div class="diagram-card">
+<svg viewBox="0 0 880 850" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;" id="arch-svg">
+  <defs>
+    <g id="read-path-group" style="display:none; pointer-events:none">
+      <path id="read-path-visual" d="M137,107 L137,152 L440,152 L440,112 L440,176 L440,241 L440,301 L440,344 L440,388 L380,436 L320,588"
+            fill="none" stroke="rgb(59,130,246)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"
+            stroke-dasharray="1000" stroke-dashoffset="1000" style="transition: stroke-dashoffset 0.6s ease-out; opacity: 0.7"/>
+    </g>
+    <g id="write-path-group" style="display:none; pointer-events:none">
+      <path id="write-path-visual" d="M137,107 L137,152 L440,152 L440,112 L440,176 L440,241 L440,301 L440,344 L440,388 L440,436 L497,548 L757,738 L757,750"
+            fill="none" stroke="rgb(220,38,38)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"
+            stroke-dasharray="1000" stroke-dashoffset="1000" style="transition: stroke-dashoffset 0.6s ease-out; opacity: 0.7"/>
+    </g>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="var(--svg-arrow)" stroke-width="1.2"/>
+    </marker>
+    <marker id="ah-both" markerWidth="8" markerHeight="6" refX="0" refY="3" orient="auto">
+      <path d="M8,0 L0,3 L8,6" fill="none" stroke="var(--svg-arrow)" stroke-width="1.2"/>
+    </marker>
+    <marker id="ah-amber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="var(--amber)" stroke-width="1.2"/>
+    </marker>
+    <marker id="ah-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="var(--red)" stroke-width="1.2"/>
+    </marker>
+    <marker id="ah-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="var(--purple)" stroke-width="1.2"/>
+    </marker>
+  </defs>
+
+  <!-- ===== CLIENT REGION ===== -->
+  <rect x="30" y="18" width="820" height="145" rx="14"
+        fill="var(--svg-client-fill)" stroke="var(--svg-client-stroke)" stroke-width="1" stroke-dasharray="6 3"/>
+  <text x="52" y="40" font-size="11" font-weight="700" fill="var(--svg-label)" letter-spacing=".08em">CLIENT PROCESS</text>
+
+  <!-- Application -->
+  <g class="arch-box" data-id="app" data-color="blue" onclick="sel('app')">
+    <rect x="60" y="55" width="155" height="52" rx="10"
+          fill="var(--svg-box-fill)" stroke="var(--blue)" stroke-width="1.5"/>
+    <text x="137" y="77" text-anchor="middle" font-size="13" font-weight="700" fill="var(--svg-text)">Application</text>
+    <text x="137" y="93" text-anchor="middle" font-size="10" fill="var(--svg-subtext)">SQL queries &amp; txns</text>
+  </g>
+
+  <!-- cdb2api -->
+  <g class="arch-box" data-id="cdb2api" data-color="blue" onclick="sel('cdb2api')">
+    <rect x="290" y="50" width="300" height="62" rx="10"
+          fill="var(--svg-box-fill)" stroke="var(--blue)" stroke-width="1.5"/>
+    <text x="440" y="74" text-anchor="middle" font-size="14" font-weight="700" fill="var(--blue)">cdb2api</text>
+    <text x="440" y="92" text-anchor="middle" font-size="10" fill="var(--svg-subtext)">client library &bull; discovery &bull; HASQL failover &bull; protobuf</text>
+  </g>
+
+  <!-- sockpool -->
+  <g class="arch-box" data-id="sockpool" data-color="cyan" onclick="sel('sockpool')">
+    <rect x="665" y="55" width="155" height="52" rx="10"
+          fill="var(--svg-box-fill)" stroke="var(--cyan)" stroke-width="1.5"/>
+    <text x="742" y="77" text-anchor="middle" font-size="13" font-weight="700" fill="var(--cyan)">sockpool</text>
+    <text x="742" y="93" text-anchor="middle" font-size="10" fill="var(--svg-subtext)">connection cache</text>
+  </g>
+
+  <!-- Arrows: App -> cdb2api -->
+  <line x1="215" y1="81" x2="286" y2="81" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+  <!-- cdb2api <-> sockpool -->
+  <line x1="590" y1="81" x2="661" y2="81" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)" marker-start="url(#ah-both)"/>
+
+  <!-- Service Discovery -->
+  <g class="arch-box" data-id="discovery" data-color="blue" onclick="sel('discovery')">
+    <rect x="320" y="120" width="240" height="34" rx="8"
+          fill="var(--svg-box-fill)" stroke="var(--blue)" stroke-width="1" stroke-dasharray="4 2"/>
+    <text x="440" y="142" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--blue)">Service Discovery (Consul / comdb2db)</text>
+  </g>
+  <line x1="440" y1="112" x2="440" y2="118" stroke="var(--svg-arrow)" stroke-width="1" marker-end="url(#ah)"/>
+
+  <!-- ===== NETWORK ===== -->
+  <text x="440" y="182" text-anchor="middle" font-size="10" font-weight="600" fill="var(--svg-label)" letter-spacing=".06em">TCP / TLS &bull; protobuf wire protocol</text>
+  <line x1="440" y1="163" x2="440" y2="173" stroke="var(--svg-arrow)" stroke-width="1.3"/>
+  <line x1="340" y1="190" x2="540" y2="190" stroke="var(--svg-arrow)" stroke-width="1.3" stroke-dasharray="6 4"/>
+  <line x1="440" y1="190" x2="440" y2="204" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+
+  <!-- ===== SERVER REGION ===== -->
+  <rect x="30" y="208" width="820" height="644" rx="14"
+        fill="var(--svg-server-fill)" stroke="var(--svg-server-stroke)" stroke-width="1" stroke-dasharray="6 3"/>
+  <text x="52" y="230" font-size="11" font-weight="700" fill="var(--svg-label)" letter-spacing=".08em">COMDB2 SERVER NODE</text>
+
+  <!-- Accept Thread -->
+  <g class="arch-box" data-id="accept" data-color="purple" onclick="sel('accept')">
+    <rect x="335" y="240" width="210" height="44" rx="10"
+          fill="var(--svg-box-fill)" stroke="var(--purple)" stroke-width="1.5"/>
+    <text x="440" y="259" text-anchor="middle" font-size="12" font-weight="700" fill="var(--purple)">Accept Thread</text>
+    <text x="440" y="274" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">newsql protocol handler</text>
+  </g>
+  <line x1="440" y1="284" x2="440" y2="298" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+
+  <!-- Thread Pool -->
+  <g class="arch-box" data-id="threadpool" data-color="purple" onclick="sel('threadpool')">
+    <rect x="295" y="300" width="290" height="44" rx="10"
+          fill="var(--svg-box-fill)" stroke="var(--purple)" stroke-width="1.5"/>
+    <text x="440" y="319" text-anchor="middle" font-size="12" font-weight="700" fill="var(--purple)">SQL Thread Pool</text>
+    <text x="440" y="334" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">appsock handler threads (one per client session)</text>
+  </g>
+
+  <!-- Auth -->
+  <g class="arch-box" data-id="auth" data-color="pink" onclick="sel('auth')">
+    <rect x="640" y="300" width="185" height="44" rx="10"
+          fill="var(--svg-box-fill)" stroke="var(--pink)" stroke-width="1.5"/>
+    <text x="732" y="319" text-anchor="middle" font-size="12" font-weight="700" fill="var(--pink)">Auth</text>
+    <text x="732" y="334" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">authentication &bull; table/column ACLs</text>
+  </g>
+  <line x1="585" y1="322" x2="636" y2="322" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)" marker-start="url(#ah-both)"/>
+
+  <!-- ===== QUERY ENGINE GROUP ===== -->
+  <rect x="115" y="362" width="540" height="120" rx="12"
+        fill="none" stroke="var(--bdr)" stroke-width="1" stroke-dasharray="4 2"/>
+  <text x="137" y="380" font-size="10" font-weight="600" fill="var(--svg-label)" letter-spacing=".06em">QUERY ENGINE</text>
+
+  <!-- Parser -->
+  <g class="arch-box" data-id="parser" data-color="amber" onclick="sel('parser')">
+    <rect x="135" y="392" width="145" height="44" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="207" y="411" text-anchor="middle" font-size="12" font-weight="700" fill="var(--amber)">Parser</text>
+    <text x="207" y="426" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">Lemon LALR &bull; AST</text>
+  </g>
+
+  <!-- Optimizer -->
+  <g class="arch-box" data-id="optimizer" data-color="amber" onclick="sel('optimizer')">
+    <rect x="310" y="392" width="145" height="44" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="382" y="411" text-anchor="middle" font-size="12" font-weight="700" fill="var(--amber)">Optimizer</text>
+    <text x="382" y="426" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">cost-based planner</text>
+  </g>
+
+  <!-- VDBE -->
+  <g class="arch-box" data-id="vdbe" data-color="amber" onclick="sel('vdbe')">
+    <rect x="485" y="392" width="145" height="44" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="557" y="411" text-anchor="middle" font-size="12" font-weight="700" fill="var(--amber)">VDBE</text>
+    <text x="557" y="426" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">bytecode interpreter</text>
+  </g>
+
+  <!-- Parser -> Optimizer -> VDBE arrows -->
+  <line x1="280" y1="414" x2="306" y2="414" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+  <line x1="455" y1="414" x2="481" y2="414" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+
+  <!-- Thread pool -> Query engine arrow -->
+  <line x1="440" y1="344" x2="440" y2="388" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+
+  <!-- Lua SP engine -->
+  <g class="arch-box" data-id="lua" data-color="teal" onclick="sel('lua')">
+    <rect x="690" y="392" width="135" height="44" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--teal)" stroke-width="1.5"/>
+    <text x="757" y="411" text-anchor="middle" font-size="12" font-weight="700" fill="var(--teal)">Lua SP Engine</text>
+    <text x="757" y="426" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">stored procedures</text>
+  </g>
+  <!-- Parser -> Lua for EXEC PROCEDURE -->
+  <path d="M280,430 Q310,458 440,458 Q600,458 688,414" fill="none" stroke="var(--teal)" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#ah)"/>
+  <text x="460" y="468" text-anchor="middle" font-size="9" fill="var(--teal)" font-style="italic">EXEC PROCEDURE</text>
+  <!-- Lua SP -> Parser (SP invokes SQL through parser) -->
+  <g id="lua-parser-group" style="display:none">
+    <path id="lua-parser-path" d="M757,392 L757,290 Q500,270 207,290 L207,392" fill="none" stroke="var(--teal)" stroke-width="2" marker-end="url(#ah)"/>
+    <text x="440" y="265" font-size="9" font-weight="600" fill="var(--teal)" text-anchor="middle">db:exec()</text>
+  </g>
+
+  <!-- ===== TRANSACTION PROCESSING GROUP ===== -->
+  <rect x="115" y="498" width="540" height="72" rx="12"
+        fill="none" stroke="var(--bdr)" stroke-width="1" stroke-dasharray="4 2"/>
+  <text x="137" y="515" font-size="10" font-weight="600" fill="var(--svg-label)" letter-spacing=".06em">TRANSACTION PROCESSING</text>
+
+  <!-- toblock -->
+  <g class="arch-box" data-id="toblock" data-color="amber" onclick="sel('toblock')">
+    <rect x="135" y="524" width="195" height="38" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="232" y="541" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--amber)">toblock</text>
+    <text x="232" y="555" text-anchor="middle" font-size="9" fill="var(--svg-subtext)">write-path coordinator &bull; constraints</text>
+  </g>
+
+  <!-- osql -->
+  <g class="arch-box" data-id="osql" data-color="red" onclick="sel('osql')">
+    <rect x="360" y="524" width="275" height="38" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--red)" stroke-width="1.5"/>
+    <text x="497" y="541" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--red)">osql</text>
+    <text x="497" y="555" text-anchor="middle" font-size="9" fill="var(--svg-subtext)">shadow transactions &bull; replicant write forwarding</text>
+  </g>
+
+  <!-- Schema Change -->
+  <g class="arch-box" data-id="schemachange" data-color="purple" onclick="sel('schemachange')">
+    <rect x="690" y="498" width="135" height="64" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--purple)" stroke-width="1.5"/>
+    <text x="757" y="525" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--purple)">Schema Change</text>
+    <text x="757" y="540" text-anchor="middle" font-size="9" fill="var(--svg-subtext)">online DDL</text>
+    <text x="757" y="553" text-anchor="middle" font-size="9" fill="var(--svg-subtext)">zero downtime</text>
+  </g>
+
+  <!-- VDBE -> toblock (write path on master) -->
+  <line x1="557" y1="436" x2="557" y2="475" stroke="var(--amber)" stroke-width="1.2" stroke-dasharray="5 3"/>
+  <path d="M557,475 Q557,500 335,524" fill="none" stroke="var(--amber)" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#ah-amber)"/>
+  <text x="490" y="490" font-size="8.5" fill="var(--amber)" font-style="italic">master writes</text>
+
+  <!-- VDBE -> osql (replicant write path) -->
+  <path d="M610,436 Q650,475 497,522" fill="none" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#ah-red)"/>
+  <text x="624" y="465" font-size="8.5" fill="var(--red)" font-style="italic">replicant writes (via osql)</text>
+
+  <!-- DDL arrow from query engine to schema change -->
+  <path d="M630,436 Q680,470 757,496" fill="none" stroke="var(--purple)" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#ah-purple)"/>
+  <text x="698" y="466" font-size="8.5" fill="var(--purple)" font-style="italic">DDL</text>
+
+  <!-- VDBE -> BDB (read path) -->
+  <line x1="380" y1="436" x2="320" y2="588" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+  <text x="360" y="520" font-size="8.5" fill="var(--svg-label)" font-style="italic">read</text>
+
+  <!-- toblock -> BDB (write path) -->
+  <line x1="232" y1="562" x2="320" y2="588" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+
+  <!-- ===== BDB LAYER GROUP ===== -->
+  <g class="arch-box" data-id="bdb" data-color="green" onclick="sel('bdb')">
+    <rect x="115" y="588" width="540" height="145" rx="12"
+          fill="none" stroke="var(--green)" stroke-width="2" opacity="0.3" style="pointer-events:none"/>
+    <text x="137" y="609" font-size="11" font-weight="700" fill="var(--green)" letter-spacing=".06em">BERKELEYDB (BDB) LAYER</text>
+  </g>
+
+  <!-- ===== STORAGE ENGINE GROUP ===== -->
+  <rect x="130" y="620" width="505" height="100" rx="12"
+        fill="none" stroke="var(--bdr)" stroke-width="1" stroke-dasharray="4 2"/>
+  <text x="152" y="637" font-size="9.5" font-weight="600" fill="var(--svg-label)" letter-spacing=".06em">STORAGE ENGINE</text>
+
+  <!-- B-Trees -->
+  <g class="arch-box" data-id="btree" data-color="green" onclick="sel('btree')">
+    <rect x="150" y="645" width="135" height="44" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--green)" stroke-width="1.5"/>
+    <text x="217" y="664" text-anchor="middle" font-size="12" font-weight="700" fill="var(--green)">B-Trees</text>
+    <text x="217" y="679" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">.ix0 .ix1 ... .dta</text>
+  </g>
+
+  <!-- Buffer Pool -->
+  <g class="arch-box" data-id="bufferpool" data-color="green" onclick="sel('bufferpool')">
+    <rect x="305" y="645" width="135" height="44" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--green)" stroke-width="1.5"/>
+    <text x="372" y="664" text-anchor="middle" font-size="12" font-weight="700" fill="var(--green)">Buffer Pool</text>
+    <text x="372" y="679" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">page cache</text>
+  </g>
+
+  <!-- WAL -->
+  <g class="arch-box" data-id="wal" data-color="green" onclick="sel('wal')">
+    <rect x="460" y="645" width="140" height="44" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--green)" stroke-width="1.5"/>
+    <text x="530" y="664" text-anchor="middle" font-size="12" font-weight="700" fill="var(--green)">WAL</text>
+    <text x="530" y="679" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">log files &bull; recovery</text>
+  </g>
+
+  <!-- Schema Change -> Storage Engine -->
+  <path d="M690,550 Q660,600 500,645" fill="none" stroke="var(--purple)" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#ah-purple)"/>
+
+  <!-- Schema Change -> Replication -->
+  <line x1="757" y1="562" x2="757" y2="640" stroke="var(--purple)" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#ah-purple)"/>
+
+  <!-- Replication (outside BDB layer) -->
+  <g class="arch-box" data-id="replication" data-color="red" onclick="sel('replication')">
+    <rect x="690" y="645" width="135" height="44" rx="9"
+          fill="var(--svg-box-fill)" stroke="var(--red)" stroke-width="1.5"/>
+    <text x="757" y="664" text-anchor="middle" font-size="12" font-weight="700" fill="var(--red)">Replication</text>
+    <text x="757" y="679" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">logical log shipping</text>
+  </g>
+  <!-- WAL -> Replication -->
+  <line x1="600" y1="667" x2="686" y2="667" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+
+  <!-- osql -> Net Layer (forward to master) -->
+  <path d="M635,548 Q750,600 757,735 L757,755" fill="none" stroke="var(--red)" stroke-width="1.1" stroke-dasharray="5 3" marker-end="url(#ah-red)"/>
+  <text x="774" y="720" font-size="8" fill="var(--red)" font-style="italic">fwd to master</text>
+
+  <!-- ===== NET ===== -->
+  <g class="arch-box" data-id="net" data-color="indigo" onclick="sel('net')">
+    <rect x="640" y="750" width="185" height="44" rx="10"
+          fill="var(--svg-box-fill)" stroke="var(--indigo)" stroke-width="1.5"/>
+    <text x="732" y="769" text-anchor="middle" font-size="12" font-weight="700" fill="var(--indigo)">Net Layer</text>
+    <text x="732" y="784" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">inter-node mesh &bull; elections</text>
+  </g>
+  <!-- Replication -> Net -->
+  <line x1="757" y1="689" x2="757" y2="746" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)"/>
+
+  <text x="757" y="820" text-anchor="middle" font-size="9.5" fill="var(--svg-label)" font-style="italic">to other cluster nodes</text>
+
+  <!-- ===== DISK ===== -->
+  <g class="arch-box" data-id="disk" data-color="dim" onclick="sel('disk')">
+    <rect x="200" y="750" width="250" height="44" rx="10"
+          fill="var(--svg-box-fill)" stroke="var(--dim)" stroke-width="1.5"/>
+    <text x="325" y="769" text-anchor="middle" font-size="12" font-weight="700" fill="var(--svg-text)">Disk</text>
+    <text x="325" y="784" text-anchor="middle" font-size="9.5" fill="var(--svg-subtext)">data files &bull; index files &bull; log files</text>
+  </g>
+  <!-- BDB -> Disk -->
+  <line x1="325" y1="733" x2="325" y2="746" stroke="var(--svg-arrow)" stroke-width="1.3" marker-end="url(#ah)" marker-start="url(#ah-both)"/>
+
+  <!-- ===== LEGEND ===== -->
+  <g transform="translate(42,800)">
+    <rect x="0" y="0" width="580" height="42" rx="8" fill="var(--svg-box-fill)" stroke="var(--bdr)" stroke-width="1" opacity=".85"/>
+    <rect x="12" y="16" width="10" height="10" rx="2" fill="var(--blue)"/><text x="28" y="25" font-size="9" fill="var(--svg-subtext)">Client</text>
+    <rect x="72" y="16" width="10" height="10" rx="2" fill="var(--cyan)"/><text x="88" y="25" font-size="9" fill="var(--svg-subtext)">Connection</text>
+    <rect x="150" y="16" width="10" height="10" rx="2" fill="var(--purple)"/><text x="166" y="25" font-size="9" fill="var(--svg-subtext)">Server</text>
+    <rect x="214" y="16" width="10" height="10" rx="2" fill="var(--pink)"/><text x="230" y="25" font-size="9" fill="var(--svg-subtext)">Auth</text>
+    <rect x="264" y="16" width="10" height="10" rx="2" fill="var(--amber)"/><text x="280" y="25" font-size="9" fill="var(--svg-subtext)">Query / Txn</text>
+    <rect x="342" y="16" width="10" height="10" rx="2" fill="var(--teal)"/><text x="358" y="25" font-size="9" fill="var(--svg-subtext)">Stored Proc</text>
+    <rect x="422" y="16" width="10" height="10" rx="2" fill="var(--green)"/><text x="438" y="25" font-size="9" fill="var(--svg-subtext)">Storage</text>
+    <rect x="490" y="16" width="10" height="10" rx="2" fill="var(--red)"/><text x="506" y="25" font-size="9" fill="var(--svg-subtext)">Replication</text>
+  </g>
+
+</svg>
+</div>
+</div>
+
+<!-- Detail Panel (Desktop) -->
+<div class="detail-wrap">
+<div class="detail-panel hidden" id="detail">
+  <div class="detail-top" id="detail-top"></div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
+</div>
+</div>
+
+<!-- Detail Drawer (Mobile) -->
+<div class="detail-drawer" id="detail-drawer">
+  <div class="detail-drawer-handle"></div>
+  <button class="detail-drawer-close" onclick="closeDetailDrawer()">✕</button>
+  <div class="detail-drawer-body" id="detail-drawer-body"></div>
+</div>
+
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip">
+  <div class="tooltip-title" id="tooltip-title"></div>
+  <div class="tooltip-desc" id="tooltip-desc"></div>
+</div>
+
+<footer>
+  <div class="keys">
+    <kbd>Esc</kbd> Close detail &nbsp;&middot;&nbsp;
+    Click any component to explore
+  </div>
+  <a href="https://github.com/bloomberg/comdb2">Comdb2 on GitHub</a> &middot;
+  <a href="comdb2-query-lifecycle.html">Life of a Query</a> &middot;
+  <a href="index.html">mohitkhullar.github.io</a>
+</footer>
+
+<script>
+(function(){
+  const d=document.documentElement, s=localStorage.getItem('cdb2t');
+  if(s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches)) d.classList.add('dark');
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',e=>{
+    if(!localStorage.getItem('cdb2t')){d.classList.toggle('dark',e.matches);ic();}
+  });
+  ic();
+})();
+function toggleTheme(){
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('cdb2t',document.documentElement.classList.contains('dark')?'dark':'light');ic();
+}
+function ic(){document.getElementById('tbtn').textContent=document.documentElement.classList.contains('dark')?'☀':'☾'}
+
+/* ===== COMPONENT DATA ===== */
+const info = {
+  app: {
+    color: 'var(--blue)', bg: 'var(--bluel)', label: 'Client',
+    title: 'Application', tip: 'Issues SQL queries through cdb2api',
+    body: `<p>The application issues SQL queries through the <code>cdb2api</code> client library. It calls <code>cdb2_run_statement()</code> or <code>cdb2_run_statement_typed()</code> for parameterized queries, then iterates results with <code>cdb2_next_record()</code>.</p>
+<p>The application is completely shielded from cluster topology, failover, and connection management &mdash; <code>cdb2api</code> handles all of that transparently. From the application's perspective, Comdb2 looks like a single reliable database endpoint.</p>
+<div class="callout"><strong>Language-agnostic.</strong> While <code>cdb2api</code> is the reference C library, the wire protocol is pure protobuf over TCP. Clients in Python, Java, Go, or any language with protobuf support can talk to Comdb2 directly.</div>`
+  },
+  cdb2api: {
+    color: 'var(--blue)', bg: 'var(--bluel)', label: 'Client Library',
+    title: 'cdb2api', tip: 'Client library: discovery, connection, failover, protobuf serialization',
+    body: `<p><code>cdb2api</code> is the client-side library that manages the full lifecycle of database communication: service discovery, connection management, query serialization, result deserialization, and transparent failover.</p>
+<p><strong>Service Discovery</strong> &mdash; locates cluster nodes via Consul DNS (SRV/A records), the <code>comdb2db</code> meta-database, or static config files. Results are cached with configurable TTL.</p>
+<p><strong>Node Selection</strong> &mdash; for reads, <code>cdb2api</code> uses proximity-aware routing to pick a node in the same data center. The read is served from any live node with a snapshot-isolated view. For writes, <code>cdb2api</code> routes to the master; if connected to a replicant, osql transparently forwards the write to the master.</p>
+<p><strong>Wire Protocol</strong> &mdash; queries are serialized as <code>CDB2_SQLQUERY</code> protobuf messages with SQL text, bind parameters, and authentication credentials. Responses arrive as streamed <code>CDB2_SQLRESPONSE</code> messages.</p>
+<p><strong>HASQL Failover</strong> &mdash; if the connected node fails mid-transaction, <code>cdb2api</code> detects the failure (via <code>is_retryable()</code>, checking for I/O errors or disconnect), picks another available node, and transparently replays the transaction from the last checkpoint. A unique transaction ID (uuid) prevents duplicate writes in case of ambiguous commit failures.</p>`
+  },
+  sockpool: {
+    color: 'var(--cyan)', bg: 'var(--cyanl)', label: 'Connection Cache',
+    title: 'sockpool', tip: 'Per-machine daemon caching idle TCP connections for reuse',
+    body: `<p><strong>sockpool</strong> is a per-machine connection cache daemon that stores idle TCP connections for reuse across queries. When a query completes, the connection is returned to sockpool instead of being closed.</p>
+<p>On the next query, <code>cdb2api</code> first checks sockpool for an existing connection to the target database. A cache hit avoids TCP handshake, SSL/TLS negotiation, and server-side session setup &mdash; reducing latency from tens of milliseconds to microseconds.</p>
+<p>sockpool manages connection lifetimes, evicts stale connections, and handles multiple databases simultaneously. It is shared across all applications on the same machine, so different processes can benefit from connections established by others.</p>
+<div class="callout"><strong>Why a separate daemon?</strong> Connection pooling at the process level doesn't survive process restarts and can't share connections across unrelated applications. sockpool runs as a system service, maximizing connection reuse across the entire machine.</div>`
+  },
+  discovery: {
+    color: 'var(--blue)', bg: 'var(--bluel)', label: 'Discovery',
+    title: 'Service Discovery', tip: 'Locates cluster nodes via Consul DNS, comdb2db, or static config',
+    body: `<p>Comdb2 uses a tiered discovery strategy to locate all nodes in a database cluster:</p>
+<p><strong>Consul DNS</strong> &mdash; the primary mechanism. SRV record lookups return a prioritized host list with ports. A records resolve IP addresses. Consul enables proximity-aware routing by encoding data center locality in the service registration.</p>
+<p><strong>comdb2db</strong> &mdash; a meta-database that maintains a registry of all Comdb2 clusters and their current membership. Used as a fallback when Consul is unavailable.</p>
+<p><strong>Static config</strong> &mdash; a configuration file with an explicit host list, used as a last resort or in development environments.</p>
+<p>Discovery results are cached with a configurable TTL in <code>cdb2api</code> to minimize lookup overhead. When failover is triggered, the cache is invalidated and fresh discovery is performed via <code>cdb2_dbinfo()</code>.</p>`
+  },
+  accept: {
+    color: 'var(--purple)', bg: 'var(--purplel)', label: 'Server',
+    title: 'Accept Thread', tip: 'Listens on ports: newsql (client), replication (cluster), legacy (compat)',
+    body: `<p>The accept thread(s) listen on multiple ports, each dedicated to a specific protocol:</p>
+<p><strong>Newsql port</strong> &mdash; the main client connection port. The accept thread detects the newsql protobuf protocol, performs SSL/TLS handshake if configured, then hands off the connection to an <strong>appsock handler</strong> thread from the SQL thread pool.</p>
+<p><strong>Replication port</strong> &mdash; inter-node mesh connections for cluster communication. Once a node-to-node connection is established, it carries heartbeats, log shipment, and quorum voting messages.</p>
+<p><strong>Legacy port</strong> &mdash; for backward compatibility with older protocol clients. Detected separately and routed to legacy handlers.</p>
+<p>Once handed off to a thread pool handler, the accept thread returns to listening and can accept more connections. This decouples connection acceptance from query execution, ensuring a single slow client doesn't block other connections.</p>`
+  },
+  threadpool: {
+    color: 'var(--purple)', bg: 'var(--purplel)', label: 'Server',
+    title: 'SQL Thread Pool', tip: 'Pool of appsock handler threads, typically one per active client session',
+    body: `<p>Each client session is served by an <strong>appsock handler thread</strong> from the SQL thread pool. The thread reads protobuf requests from the client socket, executes queries through the full pipeline, and streams results back.</p>
+<p>The thread pool is sized to handle concurrent active sessions. Each thread maintains its own SQL engine state &mdash; parser context, current transaction, and cursor set &mdash; while the session is active.</p>
+<p>When the client disconnects or returns its connection to sockpool, the thread is returned to the pool. Crucially, the connection can be returned to sockpool while the thread moves on to serve another client, enabling efficient pooling.</p>
+<div class="callout"><strong>Thread-per-session model.</strong> Each active session gets a dedicated thread. This simplifies transaction state management &mdash; all cursors, locks, and transaction context are thread-local without coordination overhead.</div>`
+  },
+  auth: {
+    color: 'var(--pink)', bg: 'var(--pinkl)', label: 'Security',
+    title: 'Authentication & Authorization', tip: 'IdentityBlob at connection (comdb2:Connect), table/column ACLs per query',
+    body: `<p><strong>Authentication</strong> validates the client's identity at connection time via the <strong>IdentityBlob</strong> protobuf message (the <code>comdb2:Connect</code> action). The principal and opaque auth data travel in the initial protocol message. External auth systems (LDAP, Kerberos, etc.) validate credentials once per session.</p>
+<p><strong>Authorization</strong> enforces access control at multiple levels:</p>
+<p><strong>Table-level ACLs</strong> &mdash; <code>READ</code>, <code>WRITE</code>, and <code>DDL</code> permissions control which operations a user can perform on each table.</p>
+<p><strong>Column-level permissions</strong> &mdash; restrict which columns a user can access within a table, enabling fine-grained data access control.</p>
+<p><strong>Federated queries (remsql)</strong> &mdash; for queries spanning multiple Comdb2 clusters, credentials are forwarded to each remote cluster for independent validation. Each cluster enforces its own access control policies.</p>
+<div class="callout"><strong>Session-based auth.</strong> Authentication via IdentityBlob happens once at connection time (comdb2:Connect action). Authorization checks (table/column ACLs) run on every query but are fast in-memory lookups.</div>`
+  },
+  parser: {
+    color: 'var(--amber)', bg: 'var(--amberl)', label: 'Query Engine',
+    title: 'SQL Parser', tip: 'Lemon-generated LALR parser producing an AST from SQL text',
+    body: `<p>The SQL string is fed into Comdb2's parser, derived from SQLite's <code>parse.y</code> grammar. The <strong>tokenizer</strong> (<code>tokenize.c</code>) breaks the SQL into tokens, and the <strong>Lemon-generated LALR parser</strong> produces an abstract syntax tree (AST).</p>
+<p>Comdb2 extends the standard SQLite grammar with custom SQL statements:</p>
+<p><code>SELECTV</code> &mdash; verified reads for serializable isolation. When set to this mode, the transaction acquires read locks and detects write-write conflicts between concurrent transactions.</p>
+<p><code>EXEC PROCEDURE</code> &mdash; dispatches to the Lua stored procedure engine instead of the optimizer.</p>
+<p><code>SET TRANSACTION ISOLATION</code> &mdash; configures isolation level (snapshot isolation or serializable). Snapshot is the default; serializable requires explicit opt-in and uses SELECTV internally.</p>
+<p><code>CREATE LUA FUNCTION / TRIGGER / CONSUMER</code> &mdash; manages server-side Lua code.</p>
+<p><code>PUT</code> tunable commands &mdash; runtime configuration of database parameters.</p>`
+  },
+  optimizer: {
+    color: 'var(--amber)', bg: 'var(--amberl)', label: 'Query Engine',
+    title: 'Cost-Based Optimizer', tip: 'Cost-based planner: index selection, join order, compile to VDBE bytecode',
+    body: `<p>The optimizer receives an AST and produces an optimal execution plan in VDBE bytecode. It uses a cost model based on available indexes and stored column statistics (sampled histograms) to estimate row counts and I/O cost.</p>
+<p><strong>Index Selection</strong> &mdash; evaluates all available indexes for each table access. For a range query, <code>WHERE id BETWEEN 100 AND 200</code>, the optimizer picks a seek+range-read over a full table scan if the estimated selectivity (histogram-based) makes the index cheaper.</p>
+<p><strong>Join Order</strong> &mdash; for multi-table queries, the optimizer evaluates different join orders. It estimates the output rows from each step and chooses the order that minimizes total I/O and intermediate rows.</p>
+<p><strong>Plan Caching</strong> &mdash; <code>PREPARE`/ generic queries cache the plan with bind-parameter placeholders, reusing it across different parameter values. This avoids re-optimization for high-frequency queries.</p>
+<p>The output is a <strong>VDBE bytecode program</strong> &mdash; a sequence of opcodes (OpenRead, Seek, Column, ResultRow, etc.) the execution engine interprets.</p>
+<div class="callout"><strong>Expert Mode.</strong> Comdb2 analyzes slow queries and recommends missing indexes using cost model predictions. Developers accept suggestions via UI, creating indexes that would have led the optimizer to choose faster plans.</div>`
+  },
+  vdbe: {
+    color: 'var(--amber)', bg: 'var(--amberl)', label: 'Query Engine',
+    title: 'VDBE (Virtual Database Engine)', tip: 'Bytecode interpreter: executes opcodes, manages cursors, streams results',
+    body: `<p>The VDBE is a register-based bytecode interpreter derived from SQLite. It executes the compiled query plan opcode by opcode, maintaining a set of runtime registers for intermediate values:</p>
+<p><code>OpenRead</code> / <code>OpenWrite</code> &mdash; opens a cursor (a persistent iterator) on an index or data table. The cursor becomes the handle for all subsequent seek/read operations on that table.</p>
+<p><code>SeekGE</code> / <code>SeekLE</code> / <code>SeekLT</code> &mdash; navigates a cursor to the first row matching a condition (e.g., <code>id >= 100</code>). This maps to a B-tree seek from root to leaf.</p>
+<p><code>Column</code> &mdash; extracts a column value from the current row under the cursor, storing it in a register. For data table reads, Comdb2 deserializes the row from the BDB B-tree page.</p>
+<p><code>Next</code> / <code>Prev</code> &mdash; advances or retracts the cursor to the next row. This walks the B-tree sequentially.</p>
+<p><code>ResultRow</code> &mdash; collects values from registers into a result tuple and emits it as a protobuf message back to the client.</p>
+<p><strong>Aggregates & Sorting</strong> &mdash; the VDBE handles <code>GROUP BY</code> via hash tables and <code>ORDER BY</code> via in-memory sorts or index-ordered reads.</p>
+<p>Results are <strong>streamed incrementally</strong> &mdash; the VDBE can emit rows one-by-one to the client as it executes, allowing pipelined result consumption.</p>`
+  },
+  lua: {
+    color: 'var(--teal)', bg: 'var(--teall)', label: 'Stored Procedures',
+    title: 'Lua SP Engine', tip: 'Server-side Lua VM for stored procedures, triggers, and consumers',
+    body: `<p>When the parser encounters <code>EXEC PROCEDURE sp_name(args)</code>, it dispatches to the <strong>Lua stored procedure engine</strong> instead of the cost-based optimizer.</p>
+<p>A server-side Lua VM executes the procedure, which can contain loops, conditionals, cursor iteration, and result emission. Each SQL statement inside the SP (<code>db:exec()</code>, <code>db:prepare()</code>) goes through the full pipeline: parse &rarr; plan &rarr; VDBE &rarr; BerkeleyDB.</p>
+<p>The key advantage: all statements run within a <strong>single server-side transaction</strong>, eliminating client round-trips and ensuring atomicity for complex multi-statement operations.</p>
+<p>Lua SPs also support <strong>triggers</strong> (fired on table mutations) and <strong>consumers</strong> (queue-based event processing). See <a href="comdb2-stored-procedures.html" style="color:var(--teal)">Life of a Stored Procedure</a> for the full walkthrough.</p>`
+  },
+  toblock: {
+    color: 'var(--amber)', bg: 'var(--amberl)', label: 'Transaction Processing',
+    title: 'toblock — Write Transaction Processor', tip: 'Orchestrates all writes: constraints, triggers, index updates, replication',
+    body: `<p><code>toblock</code> is the central <strong>write-path orchestrator</strong> on the master. All mutations from client writes, replicant write-forwards (osql), and replication log replay flow through toblock.</p>
+<p><code>toblock</code> executes <strong>block operations</strong> &mdash; bundled transactional requests. Within a single block:</p>
+<p><strong>Constraint checking</strong> &mdash; validates <code>NOT NULL</code>, <code>UNIQUE</code>, <code>CHECK</code>, and foreign key constraints. Violations abort the block and return an error.</p>
+<p><strong>Trigger dispatch</strong> &mdash; fires Lua consumer triggers (callbacks defined by <code>CREATE LUA CONSUMER</code>) when rows are inserted, updated, or deleted. Triggers can queue events or run secondary logic.</p>
+<p><strong>Schema verification</strong> &mdash; checks that the write is compatible with the current table schema. If a DDL is in progress (new columns exist but are not yet active), the write is held until the schema transition completes.</p>
+<p><strong>Index maintenance</strong> &mdash; computes index keys for all modified rows and updates every affected index. All index mutations are applied atomically with the data mutation.</p>
+<p><strong>Log generation</strong> &mdash; once mutations are applied to B-trees, <code>toblock</code> ensures log records are written to the WAL before returning commit success. Only then are replicas notified.</p>
+<div class="callout"><strong>Why a separate write path?</strong> Reads bypass toblock entirely—they go directly from VDBE to B-tree cursor operations. Writes cannot: they require constraint validation, side-effect execution (triggers), and index updates that must be atomic. Separating the write path lets reads avoid this overhead while ensuring write safety.</div>`
+  },
+  osql: {
+    color: 'var(--red)', bg: 'var(--redl)', label: 'Transaction Processing',
+    title: 'osql — Write Forwarding Layer', tip: 'Captures writes on replicants in shadow tables, forwards to master for execution',
+    body: `<p><strong>osql</strong> (offload SQL) is the mechanism that allows <strong>any node to accept writes</strong>, not just the master. When a write arrives at a replicant node, osql captures the mutation intent into <strong>in-memory shadow tables</strong> without executing it.</p>
+<p>The shadow tables accumulate all mutations (inserts, updates, deletes) for the transaction. On commit, osql forwards the entire block as a protobuf message to the <strong>master node</strong> via the net layer. This happens before any work is done, ensuring the replicant doesn't speculatively execute writes.</p>
+<p>On the master, the forwarded operations bypass VDBE parsing and go directly through <code>toblock</code> for constraint checking, trigger execution, and durable commitment. The master replicates the changes to all replicants.</p>
+<p>From the client's perspective, this forwarding is completely transparent. The replicant handles the full SQL parsing and validation, buffers the intended mutations, then the master does the real work. This avoids speculative schema-dependent logic on replicants and ensures consistency.</p>
+<div class="callout"><strong>Key files:</strong> <code>osqlshadtbl.c</code> (shadow table management), <code>osqlsession.c</code> (session tracking), <code>osqlcomm.c</code> (master communication), <code>osqlrepository.c</code> (session registry).</div>`
+  },
+  schemachange: {
+    color: 'var(--purple)', bg: 'var(--purplel)', label: 'Server',
+    title: 'Schema Change (Online DDL)', tip: 'Live ALTER TABLE without downtime: backfill + log replay + atomic swap',
+    body: `<p>Comdb2 supports <strong>online schema changes</strong> &mdash; live ALTER TABLE operations that execute while the database is running. Readers and writers continue operating on the old schema; the new schema is constructed in parallel.</p>
+<p><strong>Process:</strong></p>
+<p><strong>1. Create new B-trees</strong> &mdash; allocate new data files and index files on disk with the target schema (e.g., new column, new index). Old B-trees remain untouched.</p>
+<p><strong>2. Backfill data</strong> &mdash; scan all existing rows from the old B-trees, convert them to the new schema using <code>vtag_to_ondisk()</code>, and write to new B-trees. This scans execute as normal queries and don't block other traffic.</p>
+<p><strong>3. Catch-up phase</strong> &mdash; once backfill completes, replay any writes that occurred during the long backfill scan by walking the log. These writes are applied to the new B-trees so they're caught up to present time.</p>
+<p><strong>4. Atomic switch</strong> &mdash; update the schema metadata to point old table handles to the new B-trees. This is an instant metadata swap; all future queries use the new schema.</p>
+<p><strong>5. Replicate to cluster</strong> &mdash; the schema change is broadcasted to replicants via logical log records. Each replicant independently performs the same backfill and swap, maintaining a consistent cluster state.</p>
+<div class="callout"><strong>Versioned records.</strong> The <code>vtag</code> field in each row encodes its schema version. Readers and writers automatically convert records on-the-fly: writes create records with the current schema version; reads use <code>vtag_to_ondisk()</code> to interpret old and new formats interchangeably. This allows old and new records to coexist in the same B-tree during the schema change transition.</div>`
+  },
+  bdb: {
+    color: 'var(--green)', bg: 'var(--greenl)', label: 'Storage',
+    title: 'BerkeleyDB (BDB) Layer', tip: 'Abstraction layer for B-trees, buffer pool, WAL, and durability',
+    body: `<p>The BerkeleyDB layer is the abstraction that manages all persistent storage operations. It provides a unified interface for reads and writes through:</p>
+<p><strong>B-Trees</strong> &mdash; the underlying page-organized data structures for indexes and data tables.</p>
+<p><strong>Buffer Pool</strong> &mdash; in-memory caching of B-tree pages with clock-based eviction.</p>
+<p><strong>Write-Ahead Log (WAL)</strong> &mdash; durability via logical logging before mutations reach B-trees.</p>
+<p>Both read and write paths flow through BDB: reads traverse B-trees with buffer pool caching, writes are logged before modification, and replication ships log records. The BDB layer handles the low-level details of page management, crash recovery, and consistency.</p>`
+  },
+  btree: {
+    color: 'var(--green)', bg: 'var(--greenl)', label: 'Storage',
+    title: 'B-Trees', tip: 'BerkeleyDB B-trees for index (.ix) and data (.dta) storage',
+    body: `<p>Comdb2 uses <strong>BerkeleyDB B-trees</strong> for both index and data storage:</p>
+<p><strong>Index files</strong> (<code>.ix0</code>, <code>.ix1</code>, ...) &mdash; sorted B-trees for each defined index. Each key entry points to the corresponding data record. Index seeks traverse from root to leaf page in O(log n).</p>
+<p><strong>Data files</strong> (<code>.dta</code> stripes) &mdash; contain the actual row payloads, spread across multiple data files for parallelism. Each stripe is its own B-tree, keyed by record number (genid).</p>
+<p>Ondisk records are converted to the current in-memory schema via <code>vtag_to_ondisk()</code>, enabling <strong>live schema changes</strong> without downtime &mdash; old and new record formats coexist in the same B-tree.</p>`
+  },
+  bufferpool: {
+    color: 'var(--green)', bg: 'var(--greenl)', label: 'Storage Engine',
+    title: 'Buffer Pool', tip: 'In-memory page cache for B-tree pages, clock-based eviction',
+    body: `<p>The buffer pool (BerkeleyDB's <code>mpool</code>) caches frequently accessed B-tree pages in memory. A cache hit serves the page in microseconds; a miss triggers a disk read.</p>
+<p>The buffer pool uses a <strong>clock-based eviction algorithm</strong>. Pages modified by write transactions are marked dirty and flushed to disk by background checkpoint threads. The checkpoint LSN marks the recovery point.</p>
+<p>Buffer pool sizing is critical for performance &mdash; a working set that fits in memory avoids disk I/O entirely for read-heavy workloads.</p>
+<div class="callout"><strong>Snapshot isolation.</strong> Comdb2 implements MVCC via the BerkeleyDB log. A snapshot-isolated read transaction sees a consistent database state as of its start LSN, allowing concurrent writes without blocking reads. This is why the WAL (not the buffer pool directly) drives version visibility.</div>`
+  },
+  wal: {
+    color: 'var(--green)', bg: 'var(--greenl)', label: 'Storage Engine',
+    title: 'Write-Ahead Log (WAL)', tip: 'Logical log: durability, recovery, replication, multi-version consistency',
+    body: `<p>The write-ahead log (WAL) ensures durability: all mutations are written to persistent log storage <strong>before</strong> modifying B-tree pages. On crash, uncommitted log records are rolled back; committed ones are replayed to rebuild consistent state.</p>
+<p><strong>Logical log records</strong> &mdash; describe operations at the table level (insert row X with values Y), not physical page mutations. This enables:</p>
+<p><strong>Replication</strong> &mdash; replicants replay logical log records against their own B-trees. Since records are not page-specific, replicants can have different schema versions or page layouts and still stay consistent with the master.</p>
+<p><strong>Multi-version consistency</strong> &mdash; snapshot-isolated reads see a consistent database state as of a specific LSN (Log Sequence Number). Concurrent writes produce new log records at newer LSNs, but readers on older LSNs don't see those changes. This is how snapshot isolation is implemented in Comdb2.</p>
+<p><strong>Checkpoints</strong> &mdash; periodically, dirty B-tree pages are flushed to disk and a checkpoint LSN is written. Log records before the checkpoint LSN can be discarded (old log files deleted). A checkpoint happens when the log grows too large or during idle periods.</p>
+<p><strong>Recovery</strong> &mdash; on restart, the system finds the last checkpoint LSN, replays all log records from that point forward, and restores to the last committed state.</p>
+<div class="callout"><strong>Logical vs. physical.</strong> Physical logging (recording page mutations) is fast but couples replicants to the master's page layout. Logical logging (recording high-level operations) is slower to parse but decouples replicants, enabling rolling schema changes and heterogeneous replica hardware. Comdb2 chose logical logging for this flexibility.</div>`
+  },
+  replication: {
+    color: 'var(--red)', bg: 'var(--redl)', label: 'Replication',
+    title: 'Replication', tip: 'Master logs transactions, replicants replay: read-your-writes consistency',
+    body: `<p>The master executes committed transactions and produces BerkeleyDB log records describing the mutations. These <strong>logical log records</strong> are shipped to replicant nodes, which replay them independently to stay in sync.</p>
+<p><strong>Durability model</strong> &mdash; writes are durable when a quorum of nodes (majority of the cluster including the master) have written the log record to their persistent storage. The client waits for quorum ACK before the write is confirmed, guaranteeing survival of any minority node failure.</p>
+<p><strong>Master forwarding</strong> &mdash; if a client connects to a replicant and issues a write, osql captures the mutation intent, buffers it, then forwards the block to the master for actual execution. The master applies constraints, executes triggers, and replicates the log to the quorum. This is transparent to the client.</p>
+<p><strong>Read-your-writes</strong> &mdash; reads and writes are routed smartly: reads from any live replicant (snapshot-isolated view), writes to the master. A write from a client connected to a replicant is forwarded to the master via osql, then replicated back to that replicant before the client gets a response &mdash; ensuring the client's subsequent reads see its own writes.</p>
+<p><strong>Logical replication benefits</strong> &mdash; because log records describe high-level operations (not physical page changes), replicants can apply the same transaction even with different schema versions or page layouts. This enables rolling schema changes and upgrades across the cluster.</p>`
+  },
+  net: {
+    color: 'var(--indigo)', bg: 'var(--indigol)', label: 'Cluster',
+    title: 'Net Layer', tip: 'Full-mesh: log replication, elections, heartbeats, coherency leases',
+    body: `<p>The net layer provides a <strong>full-mesh TCP network</strong> connecting all nodes. Each pair of nodes maintains a persistent bidirectional connection for inter-node traffic, separate from client-facing connections.</p>
+<p><strong>Log replication</strong> &mdash; when the master commits a transaction, log records are immediately shipped to all replicants over the net layer. Each replicant ACKs receipt, and the master waits for a quorum of ACKs before confirming durability to the client.</p>
+<p><strong>Leader election</strong> &mdash; if the master fails (detected via heartbeat timeout), nodes run a Paxos/Raft-like election. The elected master is the node with the most advanced log state (highest LSN). The election requires a quorum to succeed—a tie or partition means no new master until quorum is restored.</p>
+<p><strong>Heartbeats</strong> &mdash; the master sends periodic heartbeats to all replicants. If a replicant misses heartbeats, it assumes the master failed and participates in election.</p>
+<p><strong>Coherency leases</strong> &mdash; replicants hold time-bounded leases from the master. A lease grants the replicant permission to serve reads with the guarantee that its local snapshot is not stale. On lease expiration or explicit revocation (e.g., if the master sees incompatible writes), the replicant stops serving reads until it re-leases from the master.</p>
+<div class="callout"><strong>Why leases?</strong> A network partition could split the cluster. Without leases, a replicant in the partitioned minority might continue serving reads with stale data even though the master and new writes exist on the majority side. Leases prevent this: when the master heartbeat stops, the lease expires, and the replicant goes read-only until reattached to the quorum.</div>`
+  },
+  disk: {
+    color: 'var(--dim)', bg: 'rgba(136,150,167,.06)', label: 'Persistence',
+    title: 'Disk Storage', tip: 'Persistent data/index/log files on disk',
+    body: `<p>All persistent state lives on disk as BerkeleyDB files:</p>
+<p><strong>Data files</strong> (<code>.dta</code>, <code>.dta.0</code>, ...) &mdash; striped B-tree files containing row payloads.</p>
+<p><strong>Index files</strong> (<code>.ix0</code>, <code>.ix1</code>, ...) &mdash; one B-tree file per index definition.</p>
+<p><strong>Log files</strong> (<code>log.*</code>) &mdash; WAL log files for durability and replication.</p>
+<p><strong>Queue extents</strong> &mdash; for databases using Comdb2's built-in queue feature (consumed by Lua SP consumers).</p>
+<p>Checkpoint threads periodically flush dirty pages from the buffer pool to disk, advancing the recovery point and allowing old log files to be recycled.</p>`
+  }
+};
+
+/* ===== TOOLTIP ===== */
+const ttEl = document.getElementById('tooltip');
+const ttTitle = document.getElementById('tooltip-title');
+const ttDesc = document.getElementById('tooltip-desc');
+
+document.querySelectorAll('.arch-box').forEach(box => {
+  box.addEventListener('mouseenter', e => {
+    const d = info[box.dataset.id];
+    if (!d) return;
+    ttTitle.textContent = d.title;
+    ttDesc.textContent = d.tip;
+    ttEl.classList.add('show');
+  });
+  box.addEventListener('mousemove', e => {
+    const x = Math.min(e.clientX + 14, window.innerWidth - 280);
+    const y = e.clientY + 18;
+    ttEl.style.left = x + 'px';
+    ttEl.style.top = y + 'px';
+  });
+  box.addEventListener('mouseleave', () => {
+    ttEl.classList.remove('show');
+  });
+});
+
+/* ===== SELECT / DETAIL ===== */
+let activeId = null;
+
+function isMobile() {
+  return window.innerWidth < 1024;
+}
+
+function sel(id) {
+  if (activeId === id) {
+    activeId = null;
+    document.querySelectorAll('.arch-box').forEach(b => b.classList.remove('active'));
+    document.getElementById('detail').classList.add('hidden');
+    closeDetailDrawer();
+    return;
+  }
+  activeId = id;
+  const d = info[id];
+  if (!d) return;
+
+  document.querySelectorAll('.arch-box').forEach(b => {
+    b.classList.toggle('active', b.dataset.id === id);
+  });
+
+  const contentHTML = `<span class="detail-phase" style="color:${d.color};background:${d.bg}">${d.label}</span>
+    <h2>${d.title}</h2>${d.body}`;
+
+  if (isMobile()) {
+    const drawerBody = document.getElementById('detail-drawer-body');
+    drawerBody.innerHTML = contentHTML;
+    drawerBody.style.setProperty('--accent', d.color);
+    drawerBody.style.setProperty('--accentl', d.bg);
+    openDetailDrawer();
+  } else {
+    const panel = document.getElementById('detail');
+    const top = document.getElementById('detail-top');
+    const body = document.getElementById('detail-body');
+    top.style.background = d.color;
+    body.innerHTML = contentHTML;
+    body.style.setProperty('--accent', d.color);
+    body.style.setProperty('--accentl', d.bg);
+    panel.classList.remove('hidden');
+  }
+}
+
+function openDetailDrawer() {
+  document.getElementById('detail-drawer').classList.add('show');
+}
+
+function closeDetailDrawer() {
+  document.getElementById('detail-drawer').classList.remove('show');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    stopTrace();
+    activeId = null;
+    document.querySelectorAll('.arch-box').forEach(b => b.classList.remove('active'));
+    document.getElementById('detail').classList.add('hidden');
+    closeDetailDrawer();
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (activeId && isMobile() && !document.getElementById('detail-drawer').classList.contains('show')) {
+    openDetailDrawer();
+  }
+});
+
+/* ===== TRACE ANIMATION ===== */
+const readPath = ['app','cdb2api','sockpool','accept','threadpool','parser','optimizer','vdbe','btree','bufferpool'];
+const writePath = ['app','cdb2api','accept','threadpool','parser','optimizer','vdbe','toblock','osql','net'];
+
+let traceTimer = null;
+let tracing = false;
+
+function startTrace(mode) {
+  stopTrace();
+  tracing = true;
+  const path = mode === 'read' ? readPath : writePath;
+  const label = mode === 'read' ? 'Read Path' : 'Write Path';
+
+  document.getElementById('trace-read').style.display = mode === 'read' ? 'none' : '';
+  document.getElementById('trace-write').style.display = mode === 'write' ? 'none' : '';
+  document.getElementById('trace-stop').style.display = '';
+
+  // Show the appropriate path visualization
+  const readPathGroup = document.getElementById('read-path-group');
+  const writePathGroup = document.getElementById('write-path-group');
+  const readPathVis = document.getElementById('read-path-visual');
+  const writePathVis = document.getElementById('write-path-visual');
+
+  if (mode === 'read') {
+    readPathGroup.style.display = 'block';
+    writePathGroup.style.display = 'none';
+    readPathVis.style.strokeDashoffset = '1000';
+  } else {
+    readPathGroup.style.display = 'none';
+    writePathGroup.style.display = 'block';
+    writePathVis.style.strokeDashoffset = '1000';
+  }
+
+  let step = 0;
+  function tick() {
+    if (!tracing || step >= path.length) {
+      if (tracing) {
+        document.getElementById('trace-progress').textContent = label + ' complete';
+        document.getElementById('lua-parser-path').classList.remove('path-flash');
+        setTimeout(() => { if (tracing) stopTrace(); }, 2000);
+      }
+      return;
+    }
+    const id = path[step];
+    document.getElementById('trace-progress').textContent = `${label}: ${step + 1}/${path.length}`;
+
+    // Draw path up to current step
+    const pathVis = mode === 'read' ? document.getElementById('read-path-visual') : document.getElementById('write-path-visual');
+    try {
+      const totalLength = pathVis.getTotalLength();
+      const progressRatio = (step + 1) / path.length;
+      const offset = 1000 * (1 - progressRatio);
+      pathVis.style.strokeDashoffset = offset;
+    } catch (e) {
+      console.error('Path visualization error:', e);
+    }
+
+    // Highlight current, dim others
+    document.querySelectorAll('.arch-box').forEach(b => {
+      b.classList.remove('active', 'glow');
+      const r = b.querySelector('rect');
+      if (r) r.style.opacity = '';
+    });
+    const box = document.querySelector(`.arch-box[data-id="${id}"]`);
+    if (box) {
+      box.classList.add('active', 'glow');
+      const r = box.querySelector('rect');
+      if (r) {
+        const d = info[id];
+        if (d) r.style.filter = `drop-shadow(0 0 10px ${getComputedStyle(document.documentElement).getPropertyValue(d.color.replace('var(','').replace(')',''))})`;
+      }
+    }
+
+    // Show and flash the lua->parser path when on lua step or after
+    const luaParserGroup = document.getElementById('lua-parser-group');
+    const luaParserPath = document.getElementById('lua-parser-path');
+    const luaIndex = path.indexOf('lua');
+    if (luaIndex !== -1 && step >= luaIndex) {
+      luaParserGroup.style.display = '';
+      if (id === 'lua') {
+        luaParserPath.classList.add('path-flash');
+      } else {
+        luaParserPath.classList.remove('path-flash');
+      }
+    } else {
+      luaParserGroup.style.display = 'none';
+    }
+
+    // Show detail
+    sel(id);
+
+    step++;
+    traceTimer = setTimeout(tick, 1800);
+  }
+  tick();
+}
+
+function stopTrace() {
+  tracing = false;
+  clearTimeout(traceTimer);
+  document.getElementById('trace-read').style.display = '';
+  document.getElementById('trace-write').style.display = '';
+  document.getElementById('trace-stop').style.display = 'none';
+  document.getElementById('trace-progress').textContent = '';
+  document.querySelectorAll('.arch-box').forEach(b => {
+    b.classList.remove('glow');
+    const r = b.querySelector('rect');
+    if (r) { r.style.opacity = ''; r.style.filter = ''; }
+  });
+  document.getElementById('read-path-visual').classList.remove('animate');
+  document.getElementById('write-path-visual').classList.remove('animate');
+  document.getElementById('read-path-group').style.display = 'none';
+  document.getElementById('write-path-group').style.display = 'none';
+  document.getElementById('lua-parser-group').style.display = 'none';
+}
+</script>
+</body>
+</html>

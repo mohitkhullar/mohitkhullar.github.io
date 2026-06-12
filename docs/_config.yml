@@ -1,0 +1,12 @@
+title: Mohit Khullar
+description: Software Engineer | Distributed Systems | Comdb2
+url: https://mohitkhullar.github.io
+theme: jekyll-theme-minimal
+show_downloads: false
+
+plugins:
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+author: Mohit Khullar
+github_username: mohitkhullar

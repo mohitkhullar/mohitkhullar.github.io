@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Life of an Expert Mode Query in Comdb2</title>
+<style>
+:root {
+  --bg:#f8fafb; --bg-top:rgba(37,99,235,.02); --card:#fff; --card-footer:#f9fafb;
+  --bdr:#e5e9f0; --text:#2d3748; --dim:#8896a7; --bright:#111827;
+  --shadow-card:0 2px 4px rgba(0,0,0,.02),0 12px 28px rgba(0,0,0,.045),0 28px 64px rgba(0,0,0,.04);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);
+  --shadow-dot:0 2px 8px;
+  --code-bg:#f0f4f8; --code-c:#5046e5;
+  --blue:#2563eb; --bluel:rgba(37,99,235,.06); --blueg:rgba(37,99,235,.22);
+  --cyan:#0891b2; --cyanl:rgba(8,145,178,.06); --cyang:rgba(8,145,178,.22);
+  --purple:#7c3aed; --purplel:rgba(124,58,237,.06); --purpleg:rgba(124,58,237,.22);
+  --amber:#d97706; --amberl:rgba(217,119,6,.06); --amberg:rgba(217,119,6,.22);
+  --red:#dc2626; --redl:rgba(220,38,38,.06); --redg:rgba(220,38,38,.22);
+  --green:#16a34a; --greenl:rgba(22,163,74,.06); --greeng:rgba(22,163,74,.22);
+  --teal:#0d9488; --teall:rgba(13,148,136,.06); --tealg:rgba(13,148,136,.22);
+}
+:root.dark {
+  --bg:#0b1222; --bg-top:rgba(59,130,246,.03); --card:#14202f; --card-footer:#111c2b;
+  --bdr:#1e3050; --text:#c4d0dc; --dim:#607080; --bright:#ecf2f8;
+  --shadow-card:0 2px 4px rgba(0,0,0,.2),0 12px 28px rgba(0,0,0,.25),0 28px 64px rgba(0,0,0,.2);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.3),0 4px 12px rgba(0,0,0,.2);
+  --shadow-dot:0 2px 12px;
+  --code-bg:rgba(80,70,229,.12); --code-c:#a5b4fc;
+  --blue:#3b82f6; --bluel:rgba(59,130,246,.1); --blueg:rgba(59,130,246,.3);
+  --cyan:#06b6d4; --cyanl:rgba(6,182,212,.1); --cyang:rgba(6,182,212,.3);
+  --purple:#a855f7; --purplel:rgba(168,85,247,.1); --purpleg:rgba(168,85,247,.3);
+  --amber:#f59e0b; --amberl:rgba(245,158,11,.1); --amberg:rgba(245,158,11,.3);
+  --red:#ef4444; --redl:rgba(239,68,68,.1); --redg:rgba(239,68,68,.3);
+  --green:#22c55e; --greenl:rgba(34,197,94,.1); --greeng:rgba(34,197,94,.3);
+  --teal:#2dd4bf; --teall:rgba(45,212,191,.1); --tealg:rgba(45,212,191,.3);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;font-size:15px;line-height:1.6;min-height:100vh;transition:background .3s,color .3s;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:500px;background:radial-gradient(ellipse 80% 50% at 50% -10%,var(--bg-top),transparent);pointer-events:none;z-index:0}
+code{font-family:'JetBrains Mono','SF Mono','Cascadia Code','Fira Code',Consolas,monospace;background:var(--code-bg);color:var(--code-c);padding:2px 7px;border-radius:5px;font-size:.84em;font-weight:500}
+
+.hdr{text-align:center;padding:48px 24px 14px;position:relative;z-index:1}
+.hdr h1{font-size:2rem;color:var(--bright);font-weight:800;letter-spacing:-.04em;line-height:1.2}
+.hdr h1 em{color:var(--purple);font-style:normal}
+.hdr .sub{color:var(--dim);font-size:.9em;margin-top:8px;line-height:1.6}
+.tbtn{position:absolute;top:40px;right:28px;width:40px;height:40px;border-radius:12px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.15em;color:var(--text);transition:all .2s cubic-bezier(.4,0,.2,1);box-shadow:var(--shadow-sm)}
+.tbtn:hover{border-color:var(--purple);color:var(--purple);transform:translateY(-1px);box-shadow:var(--shadow-sm),0 4px 12px var(--purpleg)}
+
+.sql-wrap{max-width:680px;margin:12px auto 0;padding:0 24px;position:relative;z-index:1}
+.sql-box{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:14px 20px;font-family:'JetBrains Mono','SF Mono',Consolas,monospace;font-size:.82em;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow-sm)}
+.sql-line{display:flex;gap:12px;align-items:center}
+.sql-box .p{color:var(--green);font-weight:700;flex-shrink:0}
+.kw{color:var(--purple);font-weight:600} .tbl{color:var(--amber)} .col{color:var(--cyan)}
+.expert-note{max-width:680px;margin:10px auto 0;padding:0 24px;text-align:center;font-size:.73em;color:var(--dim);line-height:1.6;position:relative;z-index:1}
+
+.stepper-wrap{max-width:860px;margin:28px auto 0;padding:0 24px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;position:relative;z-index:1}
+.stepper-wrap::-webkit-scrollbar{display:none}
+.stepper{display:flex;align-items:flex-start;justify-content:center;gap:0;min-width:min-content}
+.sec{display:flex;flex-direction:column;align-items:center;gap:8px}
+.sec-dots{display:flex;align-items:center;gap:0}
+.sec-label{font-size:.6em;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--dim)}
+.dot{width:34px;height:34px;border-radius:50%;border:2.5px solid var(--bdr);background:var(--card);display:flex;align-items:center;justify-content:center;font-size:.68em;font-weight:700;color:var(--dim);cursor:pointer;transition:all .35s cubic-bezier(.4,0,.2,1);flex-shrink:0;position:relative;z-index:1;box-shadow:var(--shadow-sm)}
+.dot:hover{border-color:var(--c,var(--purple));color:var(--c,var(--purple));transform:scale(1.08)}
+.dot.on{border-color:var(--c);background:var(--c);color:#fff;transform:scale(1.2);box-shadow:var(--shadow-dot) var(--g,var(--purpleg));animation:dot-pulse 2s cubic-bezier(.4,0,.6,1) infinite}
+.dot.ok{border-color:var(--green);background:var(--green);color:#fff;transform:scale(1);animation:none}
+@keyframes dot-pulse{0%,100%{box-shadow:var(--shadow-dot) var(--g,var(--purpleg)),0 0 0 0 var(--g,var(--purpleg))}50%{box-shadow:var(--shadow-dot) var(--g,var(--purpleg)),0 0 0 6px transparent}}
+.ln{width:16px;height:2.5px;background:var(--bdr);flex-shrink:0;transition:background .4s cubic-bezier(.4,0,.2,1);border-radius:2px}
+.ln.ok{background:var(--green)}
+.gap{width:22px;flex-shrink:0}
+
+.card-wrap{max-width:800px;margin:26px auto 0;padding:0 24px;position:relative;z-index:1}
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:18px;box-shadow:var(--shadow-card);position:relative;overflow:hidden;min-height:440px;display:flex;flex-direction:column;transition:box-shadow .4s}
+.card::after{content:'';position:absolute;top:0;left:0;right:0;height:120px;background:linear-gradient(180deg,var(--tint,rgba(124,58,237,.03)),transparent);pointer-events:none;border-radius:18px 18px 0 0;transition:background .5s}
+.card-color{position:absolute;top:0;left:0;right:0;height:3px;background:var(--sc,var(--purple));transition:background .4s;z-index:2;border-radius:18px 18px 0 0}
+
+.slides{flex:1;position:relative;overflow:hidden;z-index:1}
+.sl{position:absolute;inset:0;padding:36px 40px;overflow-y:auto;opacity:0;pointer-events:none;scrollbar-width:thin;scrollbar-color:var(--bdr) transparent}
+.sl::-webkit-scrollbar{width:5px}
+.sl::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}
+.sl.on{opacity:1;pointer-events:auto;position:relative}
+.sl.enter-r{animation:enterR .42s cubic-bezier(.4,0,.2,1)}
+.sl.enter-l{animation:enterL .42s cubic-bezier(.4,0,.2,1)}
+@keyframes enterR{from{opacity:0;transform:translateX(50px) scale(.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes enterL{from{opacity:0;transform:translateX(-50px) scale(.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+
+.sl-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.sl-phase{font-size:.67em;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--sc,var(--purple));background:var(--sl,var(--purplel));padding:4px 12px;border-radius:6px}
+.sl-num{font-size:.72em;color:var(--dim);font-weight:600;font-variant-numeric:tabular-nums}
+.sl h2{font-size:1.4em;color:var(--bright);font-weight:750;letter-spacing:-.02em;margin-bottom:12px;line-height:1.3}
+.sl-desc{font-size:.95em;line-height:1.75;margin-bottom:18px}
+.sl-detail{font-size:.88em;line-height:1.8;color:var(--dim);border-top:1px solid var(--bdr);padding-top:18px}
+.sl.on .sl-detail{color:var(--text)}
+.sl-detail p{margin-bottom:12px}
+.sl-detail p:last-child{margin-bottom:0}
+.callout{margin:18px 0 8px;padding:16px 20px;border-radius:12px;font-size:.93em;line-height:1.7;border-left:3.5px solid var(--sc,var(--purple));background:var(--sl,var(--purplel))}
+.callout strong{color:var(--sc,var(--purple))}
+.result-box{margin-top:16px;padding:14px 20px;border-radius:10px;background:var(--greenl);font-family:'JetBrains Mono','SF Mono',Consolas,monospace;font-size:.84em;font-weight:500;color:var(--green);border:1px solid rgba(22,163,74,.12);white-space:pre-line;line-height:1.8}
+.fast-badge{display:inline-block;font-size:.65em;padding:3px 10px;border-radius:6px;background:var(--amberl);color:var(--amber);font-weight:700;vertical-align:middle;margin-left:8px;letter-spacing:.02em}
+
+.card-nav{display:flex;justify-content:space-between;align-items:center;padding:16px 32px;border-top:1px solid var(--bdr);background:var(--card-footer);border-radius:0 0 18px 18px;position:relative;z-index:1}
+.nbtn{background:none;border:1px solid var(--bdr);color:var(--text);padding:9px 22px;border-radius:10px;cursor:pointer;font-size:.82em;font-family:inherit;font-weight:600;transition:all .2s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;gap:6px}
+.nbtn:hover{border-color:var(--purple);color:var(--purple);background:var(--purplel);transform:translateY(-1px)}
+.nbtn:disabled{opacity:.25;cursor:default;transform:none;border-color:var(--bdr);color:var(--dim);background:none}
+.auto-ctrl{display:flex;align-items:center;gap:6px}
+.abtn{width:36px;height:36px;border-radius:50%;border:1px solid var(--bdr);background:var(--card);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.8em;color:var(--text);transition:all .2s cubic-bezier(.4,0,.2,1)}
+.abtn:hover{border-color:var(--purple);color:var(--purple);transform:translateY(-1px)}
+.abtn.on{background:var(--purple);border-color:var(--purple);color:#fff;box-shadow:0 2px 8px var(--purpleg)}
+.spd-wrap{display:flex;align-items:center;gap:6px;margin-left:6px}
+.spd-wrap span{font-size:.65em;color:var(--dim);font-weight:500}
+.spd-wrap input{width:64px;accent-color:var(--purple);cursor:pointer}
+
+footer{text-align:center;padding:28px 24px 36px;font-size:.74em;color:var(--dim);max-width:800px;margin:20px auto 0;position:relative;z-index:1}
+footer a{color:var(--purple);text-decoration:none;font-weight:500}
+footer a:hover{text-decoration:underline}
+.keys{margin-bottom:8px;font-weight:500}
+.keys kbd{background:var(--card);border:1px solid var(--bdr);border-radius:5px;padding:3px 7px;font-family:inherit;font-size:.92em;margin:0 2px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+
+@media(max-width:640px){
+  .hdr{padding:36px 16px 10px} .hdr h1{font-size:1.4em}
+  .tbtn{top:28px;right:14px;width:34px;height:34px;border-radius:10px}
+  .dot{width:26px;height:26px;font-size:.58em;border-width:2px} .ln{width:10px} .gap{width:12px}
+  .sl{padding:24px 22px} .sl h2{font-size:1.15em}
+  .card{min-height:380px;border-radius:14px} .card::after,.card-color{border-radius:14px 14px 0 0}
+  .card-nav{padding:12px 18px;flex-wrap:wrap;gap:10px;justify-content:center;border-radius:0 0 14px 14px}
+  .sql-wrap,.expert-note,.card-wrap{padding:0 16px}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>Life of an <em>Expert Mode</em> Query in Comdb2</h1>
+  <p class="sub">How Comdb2 analyzes your SQL and recommends optimal indexes</p>
+  <button class="tbtn" onclick="toggleTheme()" id="tbtn" title="Toggle theme">&#9790;</button>
+</div>
+
+<div class="sql-wrap">
+  <div class="sql-box">
+    <div class="sql-line"><span class="p">cdb2sql&gt;</span><span><span class="kw">SET EXPERT</span> <span style="color:var(--purple)">ON</span></span></div>
+    <div class="sql-line"><span class="p">cdb2sql&gt;</span><span><span class="kw">SELECT</span> <span class="col">name</span>, <span class="col">balance</span> <span class="kw">FROM</span> <span class="tbl">accounts</span> <span class="kw">WHERE</span> <span class="col">id</span> = <span style="color:var(--green)">42</span> <span class="kw">AND</span> <span class="col">status</span> > <span style="color:var(--green)">0</span></span></div>
+  </div>
+</div>
+<div class="expert-note">
+  Expert mode intercepts SQL queries and runs them through a virtual index analysis pipeline &mdash; no data is modified, no query is actually executed against user data. It returns <strong style="color:var(--text)">CREATE INDEX</strong> recommendations.
+</div>
+
+<div class="stepper-wrap">
+<div class="stepper" id="stepper">
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="0" style="--c:var(--blue);--g:var(--blueg)">1</div><div class="ln" data-a="0"></div>
+    <div class="dot" data-i="1" style="--c:var(--blue);--g:var(--blueg)">2</div>
+  </div><div class="sec-label">Activate</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="2" style="--c:var(--purple);--g:var(--purpleg)">3</div><div class="ln" data-a="2"></div>
+    <div class="dot" data-i="3" style="--c:var(--purple);--g:var(--purpleg)">4</div>
+  </div><div class="sec-label">Setup</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="4" style="--c:var(--amber);--g:var(--amberg)">5</div><div class="ln" data-a="4"></div>
+    <div class="dot" data-i="5" style="--c:var(--amber);--g:var(--amberg)">6</div><div class="ln" data-a="5"></div>
+    <div class="dot" data-i="6" style="--c:var(--amber);--g:var(--amberg)">7</div>
+  </div><div class="sec-label">Analysis</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="7" style="--c:var(--teal);--g:var(--tealg)">8</div><div class="ln" data-a="7"></div>
+    <div class="dot" data-i="8" style="--c:var(--teal);--g:var(--tealg)">9</div>
+  </div><div class="sec-label">Evaluation</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="9" style="--c:var(--green);--g:var(--greeng)">10</div>
+  </div><div class="sec-label">Result</div></div>
+</div>
+</div>
+
+<div class="card-wrap">
+<div class="card" id="card">
+  <div class="card-color" id="ccolor"></div>
+  <div class="slides" id="slides">
+
+    <!-- 0 -->
+    <div class="sl" data-sl="0" style="--sc:var(--blue);--sl:var(--bluel)">
+      <div class="sl-top"><span class="sl-phase">Activate &mdash; Client</span><span class="sl-num">1 / 10</span></div>
+      <h2>SET EXPERT ON</h2>
+      <p class="sl-desc">The user activates expert mode for the current session. All subsequent SQL statements will be analyzed for index recommendations instead of being executed.</p>
+      <div class="sl-detail">
+        <p>The client sends <code>SET EXPERT ON</code> (or <code>SET EXPERT FAST</code> for a quicker analysis without full statistics). The server's newsql handler in <code>newsql.c</code> parses this and sets flags on the client state:</p>
+        <p><code>clnt-&gt;is_expert = 1</code> &mdash; enables expert mode</p>
+        <p><code>clnt-&gt;is_fast_expert</code> &mdash; set if <code>FAST</code> was specified (skips data sampling)</p>
+        <p>To disable: <code>SET EXPERT OFF</code> clears the flag and returns to normal query execution.</p>
+        <div class="callout"><strong>No data is modified.</strong> Expert mode is purely analytical. It never executes the user's SQL against actual data. It only analyzes the query structure to recommend indexes that would improve performance.</div>
+      </div>
+    </div>
+
+    <!-- 1 -->
+    <div class="sl" data-sl="1" style="--sc:var(--blue);--sl:var(--bluel)">
+      <div class="sl-top"><span class="sl-phase">Activate &mdash; Server Dispatch</span><span class="sl-num">2 / 10</span></div>
+      <h2>Intercept &amp; Redirect to Expert Handler</h2>
+      <p class="sl-desc">When the user submits a SQL query with expert mode active, the server bypasses normal execution and routes to <code>handle_expert_query()</code> instead.</p>
+      <div class="sl-detail">
+        <p>In <code>sqlinterfaces.c</code>, when <code>clnt-&gt;is_expert</code> is set, the server calls <code>handle_expert_query()</code> instead of the normal SQL execution path. This function:</p>
+        <p><strong>1.</strong> Downgrades the transaction level if needed (MODSNAP &rarr; SOSQL)</p>
+        <p><strong>2.</strong> Prepares the SQL engine with <code>sqlengine_prepare_engine()</code></p>
+        <p><strong>3.</strong> Hands off to the <code>sqlite3expert</code> analysis pipeline</p>
+        <p>The user's SQL never reaches the normal query planner or execution engine &mdash; it takes a completely separate path designed for index analysis.</p>
+      </div>
+    </div>
+
+    <!-- 2 -->
+    <div class="sl" data-sl="2" style="--sc:var(--purple);--sl:var(--purplel)">
+      <div class="sl-top"><span class="sl-phase">Setup &mdash; Virtual Databases</span><span class="sl-num">3 / 10</span></div>
+      <h2>Create Analysis Databases</h2>
+      <p class="sl-desc"><code>sqlite3_expert_new()</code> creates three in-memory SQLite databases that form the expert mode analysis sandbox.</p>
+      <div class="sl-detail">
+        <p>Three databases are created, each with a distinct role:</p>
+        <p><strong>db</strong> &mdash; the user's actual database connection (read-only reference for schema and statistics)</p>
+        <p><strong>dbv</strong> &mdash; the <strong>virtual table database</strong>. The user's tables are recreated as virtual tables backed by the expert module. When the query planner runs against these virtual tables, the expert module's <code>BestIndex</code> callback intercepts the planner's requests, capturing exactly what constraints and orderings the planner wants.</p>
+        <p><strong>dbm</strong> &mdash; the <strong>candidate index database</strong>. Tables are recreated as temp tables here, and candidate indexes are added to test whether they improve the query plan.</p>
+        <p>The schema is copied from the user's real database into both dbv and dbm, with Comdb2-specific transformations (e.g., <code>COLLATE DATACOPY</code> &rarr; <code>INCLUDE ALL</code>).</p>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="sl" data-sl="3" style="--sc:var(--purple);--sl:var(--purplel)">
+      <div class="sl-top"><span class="sl-phase">Setup &mdash; Statement Registration</span><span class="sl-num">4 / 10</span></div>
+      <h2>Register SQL for Analysis</h2>
+      <p class="sl-desc"><code>sqlite3_expert_sql()</code> parses the user's SQL statement and adds it to the analysis queue.</p>
+      <div class="sl-detail">
+        <p>The SQL statement is parsed and validated against the dbv virtual table database. If it parses successfully, it is stored in a linked list of <code>IdxStatement</code> objects for analysis.</p>
+        <p>Each <code>IdxStatement</code> captures:</p>
+        <p><strong>zSql</strong> &mdash; the original SQL text</p>
+        <p><strong>zIdx</strong> &mdash; (populated later) the recommended indexes for this statement</p>
+        <p><strong>zEQP</strong> &mdash; (populated later) the EXPLAIN QUERY PLAN output with recommended indexes</p>
+        <p>Multiple statements can be registered for batch analysis, though typically expert mode processes one query at a time.</p>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="sl" data-sl="4" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Analysis &mdash; Constraint Extraction</span><span class="sl-num">5 / 10</span></div>
+      <h2>Capture Planner Constraints via Virtual Tables</h2>
+      <p class="sl-desc">The query is executed against the virtual tables in dbv. The expert module's <code>BestIndex</code> callback intercepts the planner, capturing every constraint and ORDER BY the planner requests.</p>
+      <div class="sl-detail">
+        <p>This is the key insight of expert mode's design. When SQLite's query planner runs against the virtual tables, it calls <code>expertBestIndex()</code> for each table scan. This callback:</p>
+        <p><strong>1.</strong> Extracts all WHERE clause constraints &mdash; equality (<code>=</code>), range (<code>&gt;</code>, <code>&lt;</code>, <code>&ge;</code>, <code>&le;</code>), and IS NOT NULL</p>
+        <p><strong>2.</strong> Extracts ORDER BY column requirements</p>
+        <p><strong>3.</strong> Creates <code>IdxScan</code> objects recording exactly what the planner needs</p>
+        <p><strong>4.</strong> Filters non-indexable column types via <code>comdb2_is_field_indexable()</code> &mdash; skipping BLOB, BYTEARRAY, VUTF8, and other types that can't be indexed in Comdb2</p>
+        <p>The result is a precise map of what the query planner <em>wishes it had</em> for optimal execution.</p>
+      </div>
+    </div>
+
+    <!-- 5 -->
+    <div class="sl" data-sl="5" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Analysis &mdash; Candidate Generation</span><span class="sl-num">6 / 10</span></div>
+      <h2>Generate Candidate Indexes</h2>
+      <p class="sl-desc"><code>idxCreateFromWhere()</code> combines the captured constraints into candidate index definitions and creates them as temp indexes in dbm.</p>
+      <div class="sl-detail">
+        <p>For each captured scan, the algorithm generates candidate indexes by combining:</p>
+        <p><strong>Equality constraints first</strong> &mdash; all <code>=</code> columns go into the index prefix (order doesn't matter for equality)</p>
+        <p><strong>Then each range constraint</strong> &mdash; each <code>&gt;</code>, <code>&lt;</code> column is tried individually after the equality columns</p>
+        <p><strong>Then ORDER BY columns</strong> &mdash; appended to potentially enable index-ordered scans</p>
+        <p>For our query <code>WHERE id = 42 AND status &gt; 0</code>, candidates might include: <code>(id)</code>, <code>(id, status)</code>, <code>(status)</code>, and <code>(status, id)</code>.</p>
+        <p><code>idxFindCompatible()</code> checks whether an existing index already covers a candidate, avoiding redundant recommendations. Each surviving candidate is created as a <code>CREATE TEMP INDEX</code> in dbm with a hash-based name like <code>accounts_idx_00000069</code>.</p>
+      </div>
+    </div>
+
+    <!-- 6 -->
+    <div class="sl" data-sl="6" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Analysis &mdash; Statistics</span><span class="sl-num">7 / 10</span></div>
+      <h2>Populate Index Statistics <span class="fast-badge">skipped in FAST mode</span></h2>
+      <p class="sl-desc"><code>idxPopulateStat1()</code> runs <code>ANALYZEEXPERT</code> on the candidate indexes to generate cardinality statistics in <code>sqlite_stat1</code>.</p>
+      <div class="sl-detail">
+        <p>For the query planner to make accurate cost estimates, it needs to know the <strong>cardinality</strong> (selectivity) of each candidate index. This stage:</p>
+        <p><strong>1.</strong> Runs <code>ANALYZEEXPERT</code> (a Comdb2-specific variant of ANALYZE) on each candidate index in dbm</p>
+        <p><strong>2.</strong> Samples the actual table data using configurable percentage-based sampling</p>
+        <p><strong>3.</strong> Populates <code>sqlite_stat1</code> with rows like <code>16 1</code> (16 total rows, 1 row per distinct index value &mdash; meaning perfectly selective)</p>
+        <p>The planner uses these statistics in the next stage to decide which candidate index actually gives the best plan.</p>
+        <div class="callout"><strong>FAST mode skips this.</strong> <code>SET EXPERT FAST</code> sets <code>iSample = 0</code>, bypassing all data sampling. This is much quicker but the planner works without cardinality data, so recommendations may be less optimal. Useful for quick exploratory analysis.</div>
+      </div>
+    </div>
+
+    <!-- 7 -->
+    <div class="sl" data-sl="7" style="--sc:var(--teal);--sl:var(--teall)">
+      <div class="sl-top"><span class="sl-phase">Evaluation &mdash; Plan Comparison</span><span class="sl-num">8 / 10</span></div>
+      <h2>Run EXPLAIN QUERY PLAN with Candidates</h2>
+      <p class="sl-desc"><code>idxFindIndexes()</code> runs <code>EXPLAIN QUERY PLAN</code> for each statement against dbm, which now has all candidate indexes available.</p>
+      <div class="sl-detail">
+        <p>This is where the planner gets to "try on" the candidate indexes. For each registered SQL statement:</p>
+        <p><strong>1.</strong> <code>EXPLAIN QUERY PLAN</code> is executed against dbm (which has the temp candidate indexes)</p>
+        <p><strong>2.</strong> The EQP output is parsed for <code>USING INDEX</code> or <code>USING COVERING INDEX</code> references</p>
+        <p><strong>3.</strong> If the planner chose a candidate index, that index is marked as <strong>recommended</strong></p>
+        <p><strong>4.</strong> If the planner didn't use any candidate (e.g., an existing index was already optimal), no recommendation is made</p>
+        <p>The planner applies the same cost-based optimization it uses for real queries &mdash; but now it has the candidate indexes available. The indexes it actually selects are the ones worth creating.</p>
+      </div>
+    </div>
+
+    <!-- 8 -->
+    <div class="sl" data-sl="8" style="--sc:var(--teal);--sl:var(--teall)">
+      <div class="sl-top"><span class="sl-phase">Evaluation &mdash; Report Generation</span><span class="sl-num">9 / 10</span></div>
+      <h2>Build Recommendation Report</h2>
+      <p class="sl-desc"><code>sqlite3_expert_report()</code> collects the recommended indexes, their statistics, and the improved query plans into the final output.</p>
+      <div class="sl-detail">
+        <p>The report system supports four output types via <code>EXPERT_REPORT_*</code> constants:</p>
+        <p><code>EXPERT_REPORT_SQL</code> &mdash; the original SQL statement text</p>
+        <p><code>EXPERT_REPORT_INDEXES</code> &mdash; <code>CREATE INDEX</code> statements for the recommended indexes for this query</p>
+        <p><code>EXPERT_REPORT_PLAN</code> &mdash; the EXPLAIN QUERY PLAN output showing how the query would use the recommended indexes</p>
+        <p><code>EXPERT_REPORT_CANDIDATES</code> &mdash; all candidate indexes that were tested, with their stat1 data</p>
+        <p>The server uses <code>EXPERT_REPORT_CANDIDATES</code> to return the full set of tested candidates, giving the user visibility into what was considered and why.</p>
+      </div>
+    </div>
+
+    <!-- 9 -->
+    <div class="sl" data-sl="9" style="--sc:var(--green);--sl:var(--greenl)">
+      <div class="sl-top"><span class="sl-phase">Result &mdash; Recommendation</span><span class="sl-num">10 / 10</span></div>
+      <h2>Return Index Recommendations</h2>
+      <p class="sl-desc">The recommended <code>CREATE INDEX</code> statements are sent back to the client via the standard protobuf response channel.</p>
+      <div class="sl-detail">
+        <p>The server calls <code>write_response()</code> to send the recommendations back to the client through the normal newsql protobuf wire protocol. The user sees output like:</p>
+        <div class="result-box">---------- Recommended Indexes ----------
+
+CREATE INDEX accounts_idx_00000069
+  ON accounts(id, status);  -- stat1: 1000 1 50
+
+------------------------------------------</div>
+        <p style="margin-top:14px">The <code>stat1</code> comment shows the cardinality data: total rows, then rows per distinct value for each index column. Lower numbers mean higher selectivity (better).</p>
+        <p>After the response, <code>sqlite3_expert_destroy()</code> cleans up all three analysis databases (db, dbv, dbm) and frees all allocated structures. The user can then decide whether to actually create the recommended index.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card-nav">
+    <button class="nbtn" id="prev-btn" onclick="back()" disabled>&larr; Back</button>
+    <div class="auto-ctrl">
+      <button class="abtn" id="play-btn" onclick="play()" title="Play">&#9654;</button>
+      <button class="abtn" id="pause-btn" onclick="pause()" title="Pause">&#10074;&#10074;</button>
+      <button class="abtn" onclick="doReset()" title="Reset">&#8634;</button>
+      <div class="spd-wrap"><span>Speed</span><input type="range" min="1" max="5" value="3" oninput="setSpd(this.value)"></div>
+    </div>
+    <button class="nbtn" id="next-btn" onclick="fwd()">Next &rarr;</button>
+  </div>
+</div>
+</div>
+
+<footer>
+  <div class="keys">
+    <kbd>Space</kbd> Play / Pause &nbsp;&middot;&nbsp;
+    <kbd>&larr;</kbd> <kbd>&rarr;</kbd> Step &nbsp;&middot;&nbsp;
+    <kbd>R</kbd> Reset
+  </div>
+  <a href="https://github.com/bloomberg/comdb2/pull/470">Original PR #470</a> &middot;
+  <a href="comdb2-query-lifecycle.html">Query Lifecycle</a> &middot;
+  <a href="index.html">mohitkhullar.github.io</a>
+</footer>
+
+<script>
+(function(){
+  const d=document.documentElement,s=localStorage.getItem('cdb2t');
+  if(s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches)) d.classList.add('dark');
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',e=>{
+    if(!localStorage.getItem('cdb2t')){d.classList.toggle('dark',e.matches);ic();}
+  });
+  ic();
+})();
+function toggleTheme(){document.documentElement.classList.toggle('dark');localStorage.setItem('cdb2t',document.documentElement.classList.contains('dark')?'dark':'light');ic();}
+function ic(){document.getElementById('tbtn').textContent=document.documentElement.classList.contains('dark')?'☀':'☾'}
+
+const dots=document.querySelectorAll('.dot');
+const lns=document.querySelectorAll('.ln');
+const sls=document.querySelectorAll('.sl');
+const ccolor=document.getElementById('ccolor');
+const card=document.getElementById('card');
+const N=sls.length;
+let cur=0,playing=false,tmr=null,spd=30000;
+
+const tints=[
+  'rgba(37,99,235,.04)','rgba(37,99,235,.04)',
+  'rgba(124,58,237,.04)','rgba(124,58,237,.04)',
+  'rgba(217,119,6,.04)','rgba(217,119,6,.04)','rgba(217,119,6,.04)',
+  'rgba(13,148,136,.04)','rgba(13,148,136,.04)',
+  'rgba(22,163,74,.04)'
+];
+const secColors=[
+  'var(--blue)','var(--blue)',
+  'var(--purple)','var(--purple)',
+  'var(--amber)','var(--amber)','var(--amber)',
+  'var(--teal)','var(--teal)',
+  'var(--green)'
+];
+
+function show(idx,dir){
+  dir=dir||'r';cur=idx;
+  dots.forEach(dt=>{const i=+dt.dataset.i;dt.classList.toggle('on',i===cur);dt.classList.toggle('ok',i<cur);});
+  lns.forEach(l=>{l.classList.toggle('ok',+l.dataset.a<cur);});
+  sls.forEach(s=>{s.classList.remove('on','enter-r','enter-l');s.style.display='none';});
+  const sl=sls[cur];sl.style.display='block';void sl.offsetWidth;
+  sl.classList.add('on',dir==='r'?'enter-r':'enter-l');
+  ccolor.style.background=secColors[cur];
+  card.style.setProperty('--tint',tints[cur]);
+  document.getElementById('prev-btn').disabled=(cur===0);
+  document.getElementById('next-btn').disabled=(cur===N-1);
+  dots[cur].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+}
+
+function fwd(){if(cur<N-1)show(cur+1,'r');else pause();}
+function back(){if(cur>0)show(cur-1,'l');}
+function play(){playing=true;document.getElementById('play-btn').classList.add('on');document.getElementById('pause-btn').classList.remove('on');if(cur>=N-1){cur=-1;show(0,'r');}tick();}
+function pause(){playing=false;clearTimeout(tmr);document.getElementById('play-btn').classList.remove('on');document.getElementById('pause-btn').classList.add('on');}
+function doReset(){pause();show(0,'r');}
+function tick(){if(!playing)return;tmr=setTimeout(()=>{if(cur<N-1){fwd();tick();}else{playing=false;document.getElementById('play-btn').classList.remove('on');}},spd);}
+function setSpd(v){spd=[60000,45000,30000,18000,10000][v-1];}
+
+dots.forEach(d=>d.addEventListener('click',()=>{pause();const i=+d.dataset.i;show(i,i>cur?'r':'l');}));
+document.addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();playing?pause():play();}
+  if(e.key==='ArrowRight'){e.preventDefault();pause();fwd();}
+  if(e.key==='ArrowLeft'){e.preventDefault();pause();back();}
+  if(e.key==='r'||e.key==='R'){e.preventDefault();doReset();}
+});
+
+show(0,'r');setTimeout(play,1000);
+</script>
+</body>
+</html>

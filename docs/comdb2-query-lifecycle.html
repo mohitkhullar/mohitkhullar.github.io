@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Life of a Query in Comdb2</title>
+<style>
+/* ===== DESIGN SYSTEM ===== */
+:root {
+  /* Surface & Layout */
+  --bg: #f8fafb;
+  --bg-top: rgba(37, 99, 235, 0.02);
+  --card: #ffffff;
+  --card-footer: #f9fafb;
+  --bdr: #e5e9f0;
+  --text: #2d3748;
+  --dim: #8896a7;
+  --bright: #111827;
+
+  /* Shadows (layered for depth) */
+  --shadow-card: 0 2px 4px rgba(0,0,0,.02), 0 12px 28px rgba(0,0,0,.045), 0 28px 64px rgba(0,0,0,.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 4px 12px rgba(0,0,0,.03);
+  --shadow-dot: 0 2px 8px;
+
+  /* Code */
+  --code-bg: #f0f4f8;
+  --code-c: #5046e5;
+
+  /* Palette */
+  --blue: #2563eb; --bluel: rgba(37,99,235,.06); --blueg: rgba(37,99,235,.22);
+  --cyan: #0891b2; --cyanl: rgba(8,145,178,.06); --cyang: rgba(8,145,178,.22);
+  --purple: #7c3aed; --purplel: rgba(124,58,237,.06); --purpleg: rgba(124,58,237,.22);
+  --amber: #d97706; --amberl: rgba(217,119,6,.06); --amberg: rgba(217,119,6,.22);
+  --red: #dc2626; --redl: rgba(220,38,38,.06); --redg: rgba(220,38,38,.22);
+  --green: #16a34a; --greenl: rgba(22,163,74,.06); --greeng: rgba(22,163,74,.22);
+}
+
+:root.dark {
+  --bg: #0b1222;
+  --bg-top: rgba(59, 130, 246, 0.03);
+  --card: #14202f;
+  --card-footer: #111c2b;
+  --bdr: #1e3050;
+  --text: #c4d0dc;
+  --dim: #607080;
+  --bright: #ecf2f8;
+
+  --shadow-card: 0 2px 4px rgba(0,0,0,.2), 0 12px 28px rgba(0,0,0,.25), 0 28px 64px rgba(0,0,0,.2);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.2);
+  --shadow-dot: 0 2px 12px;
+
+  --code-bg: rgba(80, 70, 229, .12);
+  --code-c: #a5b4fc;
+
+  --blue: #3b82f6; --bluel: rgba(59,130,246,.1); --blueg: rgba(59,130,246,.3);
+  --cyan: #06b6d4; --cyanl: rgba(6,182,212,.1); --cyang: rgba(6,182,212,.3);
+  --purple: #a855f7; --purplel: rgba(168,85,247,.1); --purpleg: rgba(168,85,247,.3);
+  --amber: #f59e0b; --amberl: rgba(245,158,11,.1); --amberg: rgba(245,158,11,.3);
+  --red: #ef4444; --redl: rgba(239,68,68,.1); --redg: rgba(239,68,68,.3);
+  --green: #22c55e; --greenl: rgba(34,197,94,.1); --greeng: rgba(34,197,94,.3);
+}
+
+/* ===== BASE ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background .3s, color .3s;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle top glow */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 500px;
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, var(--bg-top), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+code {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  background: var(--code-bg);
+  color: var(--code-c);
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: .84em;
+  font-weight: 500;
+}
+
+/* ===== HEADER ===== */
+.hdr {
+  text-align: center;
+  padding: 48px 24px 14px;
+  position: relative;
+  z-index: 1;
+}
+.hdr h1 {
+  font-size: 2rem;
+  color: var(--bright);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+.hdr h1 em {
+  color: var(--blue);
+  font-style: normal;
+}
+.hdr .sub {
+  color: var(--dim);
+  font-size: .9em;
+  margin-top: 8px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+.tbtn {
+  position: absolute;
+  top: 40px;
+  right: 28px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--bdr);
+  background: var(--card);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15em;
+  color: var(--text);
+  transition: all .2s cubic-bezier(.4,0,.2,1);
+  box-shadow: var(--shadow-sm);
+}
+.tbtn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm), 0 4px 12px var(--blueg);
+}
+
+/* ===== SQL BOX ===== */
+.sql-wrap {
+  max-width: 680px;
+  margin: 12px auto 0;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+.sql-box {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  padding: 14px 20px;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: .82em;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+.sql-box .p { color: var(--green); font-weight: 700; flex-shrink: 0; }
+.kw { color: var(--purple); font-weight: 600; }
+.tbl { color: var(--amber); }
+.col { color: var(--cyan); }
+.proto-note {
+  max-width: 680px;
+  margin: 10px auto 0;
+  padding: 0 24px;
+  text-align: center;
+  font-size: .73em;
+  color: var(--dim);
+  line-height: 1.6;
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== STEPPER ===== */
+.stepper-wrap {
+  max-width: 860px;
+  margin: 28px auto 0;
+  padding: 0 24px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  position: relative;
+  z-index: 1;
+}
+.stepper-wrap::-webkit-scrollbar { display: none; }
+.stepper {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  min-width: min-content;
+}
+.sec {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.sec-dots {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.sec-label {
+  font-size: .6em;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+.dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2.5px solid var(--bdr);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .68em;
+  font-weight: 700;
+  color: var(--dim);
+  cursor: pointer;
+  transition: all .35s cubic-bezier(.4, 0, .2, 1);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  box-shadow: var(--shadow-sm);
+}
+.dot:hover {
+  border-color: var(--c, var(--blue));
+  color: var(--c, var(--blue));
+  transform: scale(1.08);
+}
+.dot.on {
+  border-color: var(--c);
+  background: var(--c);
+  color: #fff;
+  transform: scale(1.2);
+  box-shadow: var(--shadow-dot) var(--g, var(--blueg));
+  animation: dot-pulse 2s cubic-bezier(.4,0,.6,1) infinite;
+}
+.dot.ok {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+  transform: scale(1);
+  animation: none;
+}
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: var(--shadow-dot) var(--g, var(--blueg)), 0 0 0 0 var(--g, var(--blueg)); }
+  50% { box-shadow: var(--shadow-dot) var(--g, var(--blueg)), 0 0 0 6px transparent; }
+}
+
+.ln {
+  width: 16px;
+  height: 2.5px;
+  background: var(--bdr);
+  flex-shrink: 0;
+  transition: background .4s cubic-bezier(.4,0,.2,1);
+  border-radius: 2px;
+}
+.ln.ok { background: var(--green); }
+.gap { width: 22px; flex-shrink: 0; }
+
+/* ===== MAIN CARD ===== */
+.card-wrap {
+  max-width: 800px;
+  margin: 26px auto 0;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow .4s;
+}
+/* Section color gradient tint at top */
+.card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 120px;
+  background: linear-gradient(180deg, var(--tint, rgba(37,99,235,.03)), transparent);
+  pointer-events: none;
+  border-radius: 18px 18px 0 0;
+  transition: background .5s;
+}
+.card-color {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--sc, var(--blue));
+  transition: background .4s;
+  z-index: 2;
+  border-radius: 18px 18px 0 0;
+}
+
+/* ===== SLIDES ===== */
+.slides { flex: 1; position: relative; overflow: hidden; z-index: 1; }
+.sl {
+  position: absolute;
+  inset: 0;
+  padding: 36px 40px;
+  overflow-y: auto;
+  opacity: 0;
+  pointer-events: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bdr) transparent;
+}
+.sl::-webkit-scrollbar { width: 5px; }
+.sl::-webkit-scrollbar-thumb { background: var(--bdr); border-radius: 3px; }
+.sl.on {
+  opacity: 1;
+  pointer-events: auto;
+  position: relative;
+}
+.sl.enter-r { animation: enterR .42s cubic-bezier(.4,0,.2,1); }
+.sl.enter-l { animation: enterL .42s cubic-bezier(.4,0,.2,1); }
+@keyframes enterR {
+  from { opacity: 0; transform: translateX(50px) scale(.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes enterL {
+  from { opacity: 0; transform: translateX(-50px) scale(.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.sl-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.sl-phase {
+  font-size: .67em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--sc, var(--blue));
+  background: var(--sl, var(--bluel));
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+.sl-num {
+  font-size: .72em;
+  color: var(--dim);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sl h2 {
+  font-size: 1.4em;
+  color: var(--bright);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  line-height: 1.3;
+}
+.sl-desc {
+  font-size: .95em;
+  line-height: 1.75;
+  margin-bottom: 18px;
+  color: var(--text);
+}
+.sl-detail {
+  font-size: .88em;
+  line-height: 1.8;
+  color: var(--dim);
+  border-top: 1px solid var(--bdr);
+  padding-top: 18px;
+}
+.sl.on .sl-detail { color: var(--text); }
+.sl-detail p { margin-bottom: 12px; }
+.sl-detail p:last-child { margin-bottom: 0; }
+
+/* Callout */
+.callout {
+  margin: 18px 0 8px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  font-size: .93em;
+  line-height: 1.7;
+  border-left: 3.5px solid var(--sc, var(--blue));
+  background: var(--sl, var(--bluel));
+}
+.callout strong { color: var(--sc, var(--blue)); }
+
+/* Write badge */
+.wr {
+  display: inline-block;
+  font-size: .65em;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--amberl);
+  color: var(--amber);
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: 8px;
+  letter-spacing: .02em;
+}
+
+/* Result box */
+.result-box {
+  margin-top: 16px;
+  padding: 14px 20px;
+  border-radius: 10px;
+  background: var(--greenl);
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: .88em;
+  font-weight: 600;
+  color: var(--green);
+  border: 1px solid rgba(22, 163, 74, .12);
+}
+
+/* ===== CARD NAV ===== */
+.card-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  border-top: 1px solid var(--bdr);
+  background: var(--card-footer);
+  border-radius: 0 0 18px 18px;
+  position: relative;
+  z-index: 1;
+}
+.nbtn {
+  background: none;
+  border: 1px solid var(--bdr);
+  color: var(--text);
+  padding: 9px 22px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: .82em;
+  font-family: inherit;
+  font-weight: 600;
+  transition: all .2s cubic-bezier(.4,0,.2,1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nbtn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--bluel);
+  transform: translateY(-1px);
+}
+.nbtn:disabled {
+  opacity: .25;
+  cursor: default;
+  transform: none;
+  border-color: var(--bdr);
+  color: var(--dim);
+  background: none;
+}
+.auto-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.abtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--bdr);
+  background: var(--card);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8em;
+  color: var(--text);
+  transition: all .2s cubic-bezier(.4,0,.2,1);
+}
+.abtn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  transform: translateY(-1px);
+}
+.abtn.on {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--blueg);
+}
+.spd-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+}
+.spd-wrap span {
+  font-size: .65em;
+  color: var(--dim);
+  font-weight: 500;
+}
+.spd-wrap input {
+  width: 64px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+/* ===== FOOTER ===== */
+footer {
+  text-align: center;
+  padding: 28px 24px 36px;
+  font-size: .74em;
+  color: var(--dim);
+  max-width: 800px;
+  margin: 20px auto 0;
+  position: relative;
+  z-index: 1;
+}
+footer a {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 500;
+}
+footer a:hover { text-decoration: underline; }
+.keys {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.keys kbd {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-family: inherit;
+  font-size: .92em;
+  margin: 0 2px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 640px) {
+  .hdr { padding: 36px 16px 10px; }
+  .hdr h1 { font-size: 1.4em; }
+  .tbtn { top: 28px; right: 14px; width: 34px; height: 34px; border-radius: 10px; }
+  .dot { width: 26px; height: 26px; font-size: .58em; border-width: 2px; }
+  .ln { width: 10px; }
+  .gap { width: 12px; }
+  .sl { padding: 24px 22px; }
+  .sl h2 { font-size: 1.15em; }
+  .card { min-height: 380px; border-radius: 14px; }
+  .card::after { border-radius: 14px 14px 0 0; }
+  .card-color { border-radius: 14px 14px 0 0; }
+  .card-nav { padding: 12px 18px; flex-wrap: wrap; gap: 10px; justify-content: center; border-radius: 0 0 14px 14px; }
+  .sql-wrap, .proto-note, .card-wrap { padding: 0 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>Life of a Query in <em>Comdb2</em></h1>
+  <p class="sub">Follow a SQL query from client to clustered execution and back</p>
+  <button class="tbtn" onclick="toggleTheme()" id="tbtn" title="Toggle theme">&#9790;</button>
+</div>
+
+<div class="sql-wrap">
+  <div class="sql-box">
+    <span class="p">cdb2sql&gt;</span>
+    <span><span class="kw">SELECT</span> <span class="col">name</span>, <span class="col">balance</span> <span class="kw">FROM</span> <span class="tbl">accounts</span> <span class="kw">WHERE</span> <span class="col">id</span> = <span style="color:var(--green)">42</span></span>
+  </div>
+</div>
+<div class="proto-note">
+  Wire protocol is <strong style="color:var(--text)">protobuf-based</strong> &mdash; any client in any language implementing <code>sqlquery.proto</code> can talk to Comdb2. <code>cdb2api</code> is the reference C client.
+</div>
+
+<div class="stepper-wrap">
+<div class="stepper" id="stepper">
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="0" style="--c:var(--blue);--g:var(--blueg)">1</div><div class="ln" data-a="0"></div>
+    <div class="dot" data-i="1" style="--c:var(--blue);--g:var(--blueg)">2</div><div class="ln" data-a="1"></div>
+    <div class="dot" data-i="2" style="--c:var(--blue);--g:var(--blueg)">3</div><div class="ln" data-a="2"></div>
+    <div class="dot" data-i="3" style="--c:var(--blue);--g:var(--blueg)">4</div>
+  </div><div class="sec-label">Client</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="4" style="--c:var(--cyan);--g:var(--cyang)">5</div>
+  </div><div class="sec-label">Network</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="5" style="--c:var(--purple);--g:var(--purpleg)">6</div><div class="ln" data-a="5"></div>
+    <div class="dot" data-i="6" style="--c:var(--purple);--g:var(--purpleg)">7</div><div class="ln" data-a="6"></div>
+    <div class="dot" data-i="7" style="--c:var(--purple);--g:var(--purpleg)">8</div>
+  </div><div class="sec-label">SQL Engine</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="8" style="--c:var(--amber);--g:var(--amberg)">9</div><div class="ln" data-a="8"></div>
+    <div class="dot" data-i="9" style="--c:var(--amber);--g:var(--amberg)">10</div><div class="ln" data-a="9"></div>
+    <div class="dot" data-i="10" style="--c:var(--amber);--g:var(--amberg)">11</div><div class="ln" data-a="10"></div>
+    <div class="dot" data-i="11" style="--c:var(--amber);--g:var(--amberg)">12</div>
+  </div><div class="sec-label">Execution</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="12" style="--c:var(--red);--g:var(--redg)">13</div><div class="ln" data-a="12"></div>
+    <div class="dot" data-i="13" style="--c:var(--red);--g:var(--redg)">14</div>
+  </div><div class="sec-label">Replication</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="14" style="--c:var(--green);--g:var(--greeng)">15</div><div class="ln" data-a="14"></div>
+    <div class="dot" data-i="15" style="--c:var(--green);--g:var(--greeng)">16</div>
+  </div><div class="sec-label">Response</div></div>
+</div>
+</div>
+
+<div class="card-wrap">
+<div class="card" id="card">
+  <div class="card-color" id="ccolor"></div>
+  <div class="slides" id="slides">
+
+    <div class="sl" data-sl="0" style="--sc:var(--blue);--sl:var(--bluel)">
+      <div class="sl-top"><span class="sl-phase">Client &mdash; cdb2api</span><span class="sl-num">1 / 16</span></div>
+      <h2>Application Issues Query</h2>
+      <p class="sl-desc">The application calls the client library with a SQL statement and optional bound parameters to begin the query lifecycle.</p>
+      <div class="sl-detail">
+        <p>Using <code>cdb2api</code>, the application calls <code>cdb2_run_statement()</code> or <code>cdb2_run_statement_typed()</code> for parameterized queries. The SQL string and any bind variables are captured by the client handle (<code>cdb2_hndl_tp</code>).</p>
+        <div class="callout"><strong>Any language works.</strong> The Comdb2 wire protocol is defined entirely by protobuf schemas. You can write a client in Python, Java, Go, or any language with protobuf support. <code>cdb2api</code> is the reference C implementation, but it is not required.</div>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="1" style="--sc:var(--blue);--sl:var(--bluel)">
+      <div class="sl-top"><span class="sl-phase">Client &mdash; Service Discovery</span><span class="sl-num">2 / 16</span></div>
+      <h2>Service Discovery</h2>
+      <p class="sl-desc">Locate all nodes in the database cluster using a tiered discovery strategy: Consul DNS, comdb2db meta-database, or static configuration.</p>
+      <div class="sl-detail">
+        <p><strong>Consul DNS</strong> &mdash; SRV record lookup returns a prioritized host list with ports. A records resolve IP addresses. Results are cached with a configurable TTL to avoid repeated lookups.</p>
+        <p><strong>comdb2db</strong> &mdash; a meta-database that maintains a registry of all Comdb2 clusters and their current node membership. Used as a fallback when Consul is unavailable.</p>
+        <p><strong>Config file</strong> &mdash; a static host list, used as a last resort. A custom protobuf client can also connect directly to a known host, bypassing discovery entirely.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="2" style="--sc:var(--blue);--sl:var(--bluel)">
+      <div class="sl-top"><span class="sl-phase">Client &mdash; Connection Management</span><span class="sl-num">3 / 16</span></div>
+      <h2>Connection &amp; Node Selection</h2>
+      <p class="sl-desc">Reuse an idle connection from <strong>sockpool</strong>, or establish a new TCP connection to the best available node using proximity-aware routing.</p>
+      <div class="sl-detail">
+        <p><code>cdb2api</code> first checks <strong>sockpool</strong> for an existing idle connection to reuse, avoiding TCP and SSL handshake overhead. If none is available, a new connection is established.</p>
+        <p><strong>Node selection</strong> uses proximity-based routing &mdash; preferring nodes in the same data center or machine room for lowest latency. For reads, any node can serve the query under snapshot isolation. For writes, the client routes to the master, or the connected replicant will forward the request.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="3" style="--sc:var(--blue);--sl:var(--bluel)">
+      <div class="sl-top"><span class="sl-phase">Client &mdash; Wire Protocol</span><span class="sl-num">4 / 16</span></div>
+      <h2>Serialize &amp; Send</h2>
+      <p class="sl-desc">The query is packed into a <code>CDB2_SQLQUERY</code> protobuf message and written to the TCP socket as a length-prefixed frame.</p>
+      <div class="sl-detail">
+        <p>SQL text, bind parameters, <strong>authentication credentials</strong> (username/password or token), and request metadata (flags, timezone, feature negotiation) are serialized per <code>sqlquery.proto</code>. The auth token is included with the request so the server can validate the client's identity before executing the query. The message is length-prefixed and written to the socket in a single framed write.</p>
+        <div class="callout"><strong>Protocol buffers = language-agnostic.</strong> The <code>sqlquery.proto</code> and <code>sqlresponse.proto</code> schemas fully define the wire format. Any client that can serialize protobuf and open a TCP socket can communicate with Comdb2 &mdash; no dependency on <code>cdb2api</code> or C code required.</div>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="4" style="--sc:var(--cyan);--sl:var(--cyanl)">
+      <div class="sl-top"><span class="sl-phase">Network &mdash; Transport</span><span class="sl-num">5 / 16</span></div>
+      <h2>Network Transport</h2>
+      <p class="sl-desc">The protobuf-framed message travels over a persistent TCP connection with optional SSL/TLS encryption to the database node.</p>
+      <div class="sl-detail">
+        <p>The server's <strong>accept thread</strong> picks up the connection and identifies the <strong>newsql</strong> protocol. A dedicated <code>appsock</code> handler thread is assigned for this client session.</p>
+        <p>If SSL/TLS is configured, the handshake completes before any application data is exchanged. The framed protobuf message is read and decoded by <code>newsql_read_request()</code>.</p>
+        <p>Since the protocol is defined by protobuf schemas, the server is entirely agnostic to the client's implementation language &mdash; it processes the same protobuf messages regardless of origin.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="5" style="--sc:var(--purple);--sl:var(--purplel)">
+      <div class="sl-top"><span class="sl-phase">SQL Engine &mdash; Security</span><span class="sl-num">6 / 16</span></div>
+      <h2>Authentication &amp; Authorization</h2>
+      <p class="sl-desc">Verify client credentials, then enforce table-level and column-level permissions before allowing the query to proceed.</p>
+      <div class="sl-detail">
+        <p><strong>Authentication:</strong> The server validates the client's credentials (username/password or certificate-based). Auth results are <strong>cached per session</strong> to avoid repeated verification on every query.</p>
+        <p><strong>Authorization:</strong> Table-level ACLs are checked: <code>READ</code>, <code>WRITE</code>, or <code>DDL</code>. Column-level permissions restrict which columns a user can access. Row-level security policies can further filter visible data.</p>
+        <p><strong>Federated queries:</strong> For <code>remsql</code> queries spanning multiple clusters, credentials are forwarded to the remote cluster for independent validation &mdash; each cluster enforces its own access control.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="6" style="--sc:var(--purple);--sl:var(--purplel)">
+      <div class="sl-top"><span class="sl-phase">SQL Engine &mdash; Parser</span><span class="sl-num">7 / 16</span></div>
+      <h2>SQL Parsing</h2>
+      <p class="sl-desc">The SQLite-derived Lemon parser tokenizes the SQL text and produces an abstract syntax tree (AST).</p>
+      <div class="sl-detail">
+        <p>The SQL string is fed into Comdb2's parser, derived from SQLite's <code>parse.y</code> grammar. The <strong>tokenizer</strong> (<code>tokenize.c</code>) breaks the SQL into tokens, and the <strong>Lemon-generated LALR parser</strong> produces an AST representing the query structure.</p>
+        <p>Comdb2 extends the grammar with custom SQL: <code>SELECTV</code> (verified reads for serializable isolation), <code>SET TRANSACTION</code>, <code>EXEC PROCEDURE</code>, <code>CREATE LUA FUNCTION</code>, <code>PUT</code> tunable commands, and more.</p>
+        <div class="callout"><strong>Alternate path &mdash; Lua Stored Procedures.</strong> When the parser encounters <code>EXEC PROCEDURE sp_name(args)</code>, it dispatches to the <strong>Lua SP engine</strong> instead of the cost-based optimizer. A server-side Lua VM executes the procedure, which can contain loops, conditionals, and multiple SQL statements. Each SQL statement inside the SP goes through the full pipeline (parse &rarr; plan &rarr; VDBE &rarr; BerkeleyDB), but all execute within a single server-side transaction &mdash; eliminating client round-trips for multi-statement logic.</div>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="7" style="--sc:var(--purple);--sl:var(--purplel)">
+      <div class="sl-top"><span class="sl-phase">SQL Engine &mdash; Optimizer</span><span class="sl-num">8 / 16</span></div>
+      <h2>Query Planning &amp; Optimization</h2>
+      <p class="sl-desc">The cost-based optimizer evaluates available indexes, estimates selectivity, and compiles the cheapest plan into VDBE bytecode.</p>
+      <div class="sl-detail">
+        <p>The planner evaluates indexes on <code>accounts</code> and uses stored statistics (sampled histograms) to estimate how many rows match <code>id = 42</code>. If an index on <code>id</code> exists, it picks an <strong>index seek</strong> (O(log n)) over a full table scan.</p>
+        <p>The output is a <strong>VDBE bytecode program</strong> &mdash; a sequence of opcodes the execution engine will interpret. <strong>SQL fingerprinting</strong> caches compiled plans for repeated queries with different bind values, avoiding re-planning overhead.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="8" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Execution &mdash; Transaction</span><span class="sl-num">9 / 16</span></div>
+      <h2>Transaction Begin</h2>
+      <p class="sl-desc">Open a transaction at the configured isolation level &mdash; snapshot or serializable &mdash; establishing an LSN-based point-in-time read view.</p>
+      <div class="sl-detail">
+        <p><strong>Snapshot isolation:</strong> provides a consistent point-in-time view of the database. Each page is checked against the transaction's start LSN, ensuring reads always see committed data from that moment &mdash; without blocking concurrent writes.</p>
+        <p><strong>Serializable isolation:</strong> extends snapshot with <strong>write-write conflict detection</strong>. If two concurrent transactions modify the same rows, one is aborted and the client retries automatically.</p>
+        <p>The transaction acquires an <strong>LSN-based read view</strong>, pinning which version of each B-tree page is visible for the duration of the query.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="9" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Execution &mdash; Bytecode</span><span class="sl-num">10 / 16</span></div>
+      <h2>VDBE Execution</h2>
+      <p class="sl-desc">The VDBE interpreter steps through the compiled bytecode program &mdash; opening cursors, seeking into indexes, and fetching matching rows.</p>
+      <div class="sl-detail">
+        <p>The Virtual Database Engine runs opcodes sequentially. For our query:</p>
+        <p><code>OpenRead</code> &rarr; opens a B-tree cursor on the index for <code>accounts</code></p>
+        <p><code>SeekGE</code> &rarr; positions the cursor to the first entry where <code>id &ge; 42</code></p>
+        <p><code>Column</code> &rarr; extracts <code>name</code> and <code>balance</code> from the matching row</p>
+        <p><code>ResultRow</code> &rarr; emits the result row back toward the client</p>
+        <p>Each data-access opcode calls through Comdb2's backend layer (<code>sqlite3BtreeXxx()</code>) which maps to BerkeleyDB cursor operations.</p>
+        <div class="callout"><strong>Stored procedures &mdash; Lua orchestrates, VDBE executes.</strong> For <code>EXEC PROCEDURE</code> calls, a <strong>Lua VM</strong> runs the stored procedure server-side. The Lua code orchestrates the logic &mdash; loops, conditionals, cursor iteration, result emission &mdash; but each SQL statement it executes internally (<code>db:exec()</code>, <code>db:prepare()</code>) goes through the full parse &rarr; plan &rarr; VDBE &rarr; BerkeleyDB pipeline. The key advantage: all statements run within a single server-side transaction, eliminating client round-trips and ensuring atomicity for complex multi-statement operations.</div>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="10" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Execution &mdash; Storage</span><span class="sl-num">11 / 16</span></div>
+      <h2>B-Tree &amp; Buffer Pool</h2>
+      <p class="sl-desc">Navigate BerkeleyDB B-trees to locate data. Pages are served from the in-memory buffer pool or read from disk on a cache miss.</p>
+      <div class="sl-detail">
+        <p>Comdb2 uses <strong>BerkeleyDB B-trees</strong> for both index and data storage:</p>
+        <p><strong>Index files</strong> (<code>.ix0</code>, <code>.ix1</code>, ...) &mdash; sorted B-trees for each defined index. The seek for <code>id = 42</code> traverses from root to leaf page.</p>
+        <p><strong>Data files</strong> (<code>.dta</code> stripes) &mdash; contain the actual row payloads, spread across multiple data files for parallelism.</p>
+        <p>The <strong>buffer pool</strong> caches frequently accessed pages in memory. A cache hit serves the page in microseconds; a miss triggers a disk read. Ondisk records are converted to the current in-memory schema via <code>vtag_to_ondisk()</code>, enabling live schema changes without downtime.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="11" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Execution &mdash; Processing</span><span class="sl-num">12 / 16</span></div>
+      <h2>Row Filtering &amp; Projection</h2>
+      <p class="sl-desc">Apply remaining WHERE predicates not covered by the index, project the requested columns, and enforce any constraints.</p>
+      <div class="sl-detail">
+        <p>After fetching candidate rows from the B-tree, any <strong>residual WHERE conditions</strong> not fully covered by the chosen index are evaluated as post-fetch filters.</p>
+        <p><strong>Projection</strong> extracts only the requested columns (<code>name</code>, <code>balance</code>), discarding the rest. Type conversion and formatting (datetime zones, decimal precision) are applied here.</p>
+        <p>For write operations, this stage also enforces <strong>constraints</strong>: <code>NOT NULL</code>, <code>CHECK</code>, <code>UNIQUE</code>, and foreign key validations.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="12" style="--sc:var(--red);--sl:var(--redl)">
+      <div class="sl-top"><span class="sl-phase">Replication &mdash; Cluster</span><span class="sl-num">13 / 16</span></div>
+      <h2>Replication &amp; Commit <span class="wr">writes only</span></h2>
+      <p class="sl-desc">For write transactions: generate log records, broadcast to all replicants, and wait for majority acknowledgment before confirming the commit.</p>
+      <div class="sl-detail">
+        <p>Write transactions produce <strong>BerkeleyDB log records</strong> describing each mutation. Comdb2 uses <strong>logical replication</strong> &mdash; the master broadcasts logical log records (not physical page images) over the replication network to all replicant nodes, allowing replicants to maintain consistency even across independent schema versions.</p>
+        <p><strong>Durable commits</strong> require a <strong>majority of nodes</strong> to acknowledge receipt before the server returns success. This guarantees the write survives any single node failure.</p>
+        <p><strong>Master forwarding:</strong> if the client connected to a replicant for a write, the replicant transparently forwards the entire transaction to the master for execution and replication. The client does not need to reconnect.</p>
+        <p>Read queries skip this stage entirely &mdash; they are served from any node's local snapshot. Stored procedure transactions also flow through this path &mdash; the entire multi-statement SP commits as a single replicated unit.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="13" style="--sc:var(--red);--sl:var(--redl)">
+      <div class="sl-top"><span class="sl-phase">Replication &mdash; High Availability</span><span class="sl-num">14 / 16</span></div>
+      <h2>HASQL &mdash; Transparent Failover</h2>
+      <p class="sl-desc">If the connected node fails mid-query, the client library transparently detects the failure and retries on another healthy node.</p>
+      <div class="sl-detail">
+        <p><strong>HASQL</strong> (High Availability SQL) is a protocol between <code>cdb2api</code> and the server that enables transparent failover without application-visible errors.</p>
+        <p><strong>What triggers failover:</strong> The <code>is_retryable()</code> function in <code>cdb2api.c</code> determines which errors trigger automatic retry. The retryable errors are: <code>CDB2ERR_NOMASTER</code> (no master available &mdash; also returned by physical replicants that reject writes), <code>CDB2ERR_TRAN_IO_ERROR</code> (I/O failure mid-transaction), <code>CDB2ERR_REJECTED</code> (server too busy), and <code>MASTER_TIMEOUT</code>. Additionally, <code>CHANGENODE</code> (protobuf error 402) is returned on durability failures when a commit could not be made durable across the cluster.</p>
+        <p><strong>Retry conditions:</strong> Retries only happen when there is a snapshot file (SNAPSHOT isolation transaction), or the query is not inside a transaction, or there is a pending commit to verify. The client disconnects, fetches updated cluster info via <code>cdb2_dbinfo()</code>, connects to a different host, and resends all queries from the transaction start. Max retries: <code>num_hosts &times; 3</code>.</p>
+        <p><strong>For reads:</strong> the client detects the error response or broken connection, picks another node, and re-executes. Safe because reads are served from consistent snapshots.</p>
+        <p><strong>For writes &mdash; the ambiguous failure case:</strong> The most critical scenario is when the connection drops <em>after</em> the client sends a commit but <em>before</em> receiving the response. The client attaches a <strong>unique transaction ID</strong> (uuid) to every write. On retry, it queries another node to check if that uuid was committed. If yes, it returns success without re-executing. If no, it safely retries. This prevents duplicate writes.</p>
+        <p><strong>Physical replicants:</strong> Dedicated read-only physical replicants reject writes with <code>ERR_NOMASTER</code> (via <code>toblock.c</code>). Normal cluster replicants can forward writes to the master. If the master is unreachable or in election, cdb2api retries until a new master is elected.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="14" style="--sc:var(--green);--sl:var(--greenl)">
+      <div class="sl-top"><span class="sl-phase">Response &mdash; Serialization</span><span class="sl-num">15 / 16</span></div>
+      <h2>Result Streaming</h2>
+      <p class="sl-desc">Result rows (or error responses) are packed into <code>CDB2_SQLRESPONSE</code> protobuf messages and streamed back to the client.</p>
+      <div class="sl-detail">
+        <p>Each response message contains either a <strong>result row</strong> or an <strong>error code with context</strong>. The response type field tells the client what it's receiving: data rows, last row marker, or an error that may trigger HA retry (see HASQL stage).</p>
+        <p>For success, column types are encoded per the wire protocol: <code>INTEGER</code>, <code>REAL</code>, <code>CSTRING</code>, <code>BLOB</code>, <code>DATETIME</code>, <code>INTERVALDS</code>, <code>INTERVALYM</code>, and more. Rows are <strong>streamed incrementally</strong> &mdash; the client can start consuming results before the query finishes on the server.</p>
+        <p>For errors, the response includes the error code (e.g., <code>CDB2ERR_NOMASTER</code>, <code>CDB2ERR_TRAN_IO_ERROR</code>, <code>CHANGENODE</code>) and an error string. The client library's <code>is_retryable()</code> function inspects the error code to decide: return the error to the application, or transparently retry on another node via HASQL.</p>
+        <p>Any protobuf-capable client can decode these <code>CDB2_SQLRESPONSE</code> messages directly from the wire &mdash; the format is fully defined by the proto schema.</p>
+      </div>
+    </div>
+
+    <div class="sl" data-sl="15" style="--sc:var(--green);--sl:var(--greenl)">
+      <div class="sl-top"><span class="sl-phase">Response &mdash; Delivery</span><span class="sl-num">16 / 16</span></div>
+      <h2>Client Receives Results</h2>
+      <p class="sl-desc">The client library delivers decoded rows to the application. When complete, the TCP connection returns to sockpool for reuse by the next query.</p>
+      <div class="sl-detail">
+        <p>The application calls <code>cdb2_next_record()</code> in a loop. Each call decodes the next protobuf response and returns the row. Column values are accessed with <code>cdb2_column_value()</code>, <code>cdb2_column_type()</code>, and <code>cdb2_column_size()</code>.</p>
+        <p>When all rows are consumed, <code>CDB2_OK_DONE</code> signals query completion. The TCP connection is returned to <strong>sockpool</strong> for reuse, avoiding connection setup overhead on the next query.</p>
+        <div class="result-box">name = "Alice" &nbsp;&nbsp; balance = 10042.50 &nbsp; &#10003;</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card-nav">
+    <button class="nbtn" id="prev-btn" onclick="back()" disabled>&larr; Back</button>
+    <div class="auto-ctrl">
+      <button class="abtn" id="play-btn" onclick="play()" title="Play">&#9654;</button>
+      <button class="abtn" id="pause-btn" onclick="pause()" title="Pause">&#10074;&#10074;</button>
+      <button class="abtn" onclick="doReset()" title="Reset">&#8634;</button>
+      <div class="spd-wrap"><span>Speed</span><input type="range" min="1" max="5" value="3" oninput="setSpd(this.value)"></div>
+    </div>
+    <button class="nbtn" id="next-btn" onclick="fwd()">Next &rarr;</button>
+  </div>
+</div>
+</div>
+
+<footer>
+  <div class="keys">
+    <kbd>Space</kbd> Play / Pause &nbsp;&middot;&nbsp;
+    <kbd>&larr;</kbd> <kbd>&rarr;</kbd> Step &nbsp;&middot;&nbsp;
+    <kbd>R</kbd> Reset
+  </div>
+  <a href="https://github.com/bloomberg/comdb2">Comdb2 on GitHub</a> &middot;
+  <a href="index.html">mohitkhullar.github.io</a>
+</footer>
+
+<script>
+(function(){
+  const d=document.documentElement, s=localStorage.getItem('cdb2t');
+  if(s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches)) d.classList.add('dark');
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',e=>{
+    if(!localStorage.getItem('cdb2t')){d.classList.toggle('dark',e.matches);ic();}
+  });
+  ic();
+})();
+function toggleTheme(){
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('cdb2t',document.documentElement.classList.contains('dark')?'dark':'light');ic();
+}
+function ic(){document.getElementById('tbtn').textContent=document.documentElement.classList.contains('dark')?'☀':'☾'}
+
+const dots=document.querySelectorAll('.dot');
+const lns=document.querySelectorAll('.ln');
+const sls=document.querySelectorAll('.sl');
+const ccolor=document.getElementById('ccolor');
+const card=document.getElementById('card');
+const N=sls.length;
+let cur=0,playing=false,tmr=null,spd=30000;
+
+const tints=[
+  'rgba(37,99,235,.04)','rgba(37,99,235,.04)','rgba(37,99,235,.04)','rgba(37,99,235,.04)',
+  'rgba(8,145,178,.04)',
+  'rgba(124,58,237,.04)','rgba(124,58,237,.04)','rgba(124,58,237,.04)',
+  'rgba(217,119,6,.04)','rgba(217,119,6,.04)','rgba(217,119,6,.04)','rgba(217,119,6,.04)',
+  'rgba(220,38,38,.04)','rgba(220,38,38,.04)',
+  'rgba(22,163,74,.04)','rgba(22,163,74,.04)'
+];
+const secColors=[
+  'var(--blue)','var(--blue)','var(--blue)','var(--blue)',
+  'var(--cyan)',
+  'var(--purple)','var(--purple)','var(--purple)',
+  'var(--amber)','var(--amber)','var(--amber)','var(--amber)',
+  'var(--red)','var(--red)',
+  'var(--green)','var(--green)'
+];
+
+function show(idx,dir){
+  dir=dir||'r';
+  cur=idx;
+  dots.forEach(dt=>{
+    const i=+dt.dataset.i;
+    dt.classList.toggle('on',i===cur);
+    dt.classList.toggle('ok',i<cur);
+  });
+  lns.forEach(l=>{ l.classList.toggle('ok',+l.dataset.a<cur); });
+  sls.forEach(s=>{
+    s.classList.remove('on','enter-r','enter-l');
+    s.style.display='none';
+  });
+  const sl=sls[cur];
+  sl.style.display='block';
+  void sl.offsetWidth;
+  sl.classList.add('on', dir==='r'?'enter-r':'enter-l');
+  ccolor.style.background=secColors[cur];
+  card.style.setProperty('--tint', tints[cur]);
+  document.getElementById('prev-btn').disabled=(cur===0);
+  document.getElementById('next-btn').disabled=(cur===N-1);
+  dots[cur].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+}
+
+function fwd(){if(cur<N-1)show(cur+1,'r');else pause();}
+function back(){if(cur>0)show(cur-1,'l');}
+function play(){
+  playing=true;
+  document.getElementById('play-btn').classList.add('on');
+  document.getElementById('pause-btn').classList.remove('on');
+  if(cur>=N-1){cur=-1;show(0,'r');}
+  tick();
+}
+function pause(){
+  playing=false;clearTimeout(tmr);
+  document.getElementById('play-btn').classList.remove('on');
+  document.getElementById('pause-btn').classList.add('on');
+}
+function doReset(){pause();show(0,'r');}
+function tick(){
+  if(!playing)return;
+  tmr=setTimeout(()=>{
+    if(cur<N-1){fwd();tick();}
+    else{playing=false;document.getElementById('play-btn').classList.remove('on');}
+  },spd);
+}
+function setSpd(v){spd=[60000,45000,30000,18000,10000][v-1];}
+
+dots.forEach(d=>d.addEventListener('click',()=>{
+  pause();const i=+d.dataset.i;show(i,i>cur?'r':'l');
+}));
+document.addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();playing?pause():play();}
+  if(e.key==='ArrowRight'){e.preventDefault();pause();fwd();}
+  if(e.key==='ArrowLeft'){e.preventDefault();pause();back();}
+  if(e.key==='r'||e.key==='R'){e.preventDefault();doReset();}
+});
+
+show(0,'r');
+setTimeout(play,1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Life of a Stored Procedure in Comdb2</title>
+<style>
+:root {
+  --bg:#f8fafb;--bg-top:rgba(217,119,6,.02);--card:#fff;--card-footer:#f9fafb;
+  --bdr:#e5e9f0;--text:#2d3748;--dim:#8896a7;--bright:#111827;
+  --shadow-card:0 2px 4px rgba(0,0,0,.02),0 12px 28px rgba(0,0,0,.045),0 28px 64px rgba(0,0,0,.04);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);
+  --shadow-dot:0 2px 8px;
+  --code-bg:#f0f4f8;--code-c:#5046e5;
+  --blue:#2563eb;--bluel:rgba(37,99,235,.06);--blueg:rgba(37,99,235,.22);
+  --cyan:#0891b2;--cyanl:rgba(8,145,178,.06);--cyang:rgba(8,145,178,.22);
+  --purple:#7c3aed;--purplel:rgba(124,58,237,.06);--purpleg:rgba(124,58,237,.22);
+  --amber:#d97706;--amberl:rgba(217,119,6,.06);--amberg:rgba(217,119,6,.22);
+  --red:#dc2626;--redl:rgba(220,38,38,.06);--redg:rgba(220,38,38,.22);
+  --green:#16a34a;--greenl:rgba(22,163,74,.06);--greeng:rgba(22,163,74,.22);
+  --teal:#0d9488;--teall:rgba(13,148,136,.06);--tealg:rgba(13,148,136,.22);
+}
+:root.dark {
+  --bg:#0b1222;--bg-top:rgba(245,158,11,.03);--card:#14202f;--card-footer:#111c2b;
+  --bdr:#1e3050;--text:#c4d0dc;--dim:#607080;--bright:#ecf2f8;
+  --shadow-card:0 2px 4px rgba(0,0,0,.2),0 12px 28px rgba(0,0,0,.25),0 28px 64px rgba(0,0,0,.2);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.3),0 4px 12px rgba(0,0,0,.2);
+  --shadow-dot:0 2px 12px;
+  --code-bg:rgba(80,70,229,.12);--code-c:#a5b4fc;
+  --blue:#3b82f6;--bluel:rgba(59,130,246,.1);--blueg:rgba(59,130,246,.3);
+  --cyan:#06b6d4;--cyanl:rgba(6,182,212,.1);--cyang:rgba(6,182,212,.3);
+  --purple:#a855f7;--purplel:rgba(168,85,247,.1);--purpleg:rgba(168,85,247,.3);
+  --amber:#f59e0b;--amberl:rgba(245,158,11,.1);--amberg:rgba(245,158,11,.3);
+  --red:#ef4444;--redl:rgba(239,68,68,.1);--redg:rgba(239,68,68,.3);
+  --green:#22c55e;--greenl:rgba(34,197,94,.1);--greeng:rgba(34,197,94,.3);
+  --teal:#2dd4bf;--teall:rgba(45,212,191,.1);--tealg:rgba(45,212,191,.3);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;font-size:15px;line-height:1.6;min-height:100vh;transition:background .3s,color .3s;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:500px;background:radial-gradient(ellipse 80% 50% at 50% -10%,var(--bg-top),transparent);pointer-events:none;z-index:0}
+code{font-family:'JetBrains Mono','SF Mono','Cascadia Code','Fira Code',Consolas,monospace;background:var(--code-bg);color:var(--code-c);padding:2px 7px;border-radius:5px;font-size:.84em;font-weight:500}
+.hdr{text-align:center;padding:48px 24px 14px;position:relative;z-index:1}
+.hdr h1{font-size:2rem;color:var(--bright);font-weight:800;letter-spacing:-.04em;line-height:1.2}
+.hdr h1 em{color:var(--amber);font-style:normal}
+.hdr .sub{color:var(--dim);font-size:.9em;margin-top:8px;line-height:1.6}
+.tbtn{position:absolute;top:40px;right:28px;width:40px;height:40px;border-radius:12px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.15em;color:var(--text);transition:all .2s cubic-bezier(.4,0,.2,1);box-shadow:var(--shadow-sm)}
+.tbtn:hover{border-color:var(--amber);color:var(--amber);transform:translateY(-1px);box-shadow:var(--shadow-sm),0 4px 12px var(--amberg)}
+.sql-wrap{max-width:680px;margin:12px auto 0;padding:0 24px;position:relative;z-index:1}
+.sql-box{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:14px 20px;font-family:'JetBrains Mono','SF Mono',Consolas,monospace;font-size:.82em;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow-sm)}
+.sql-line{display:flex;gap:12px;align-items:flex-start}
+.sql-box .p{color:var(--green);font-weight:700;flex-shrink:0}
+.kw{color:var(--purple);font-weight:600} .fn{color:var(--amber);font-weight:600} .str{color:var(--green)} .cm{color:var(--dim);font-style:italic}
+.sp-note{max-width:680px;margin:10px auto 0;padding:0 24px;text-align:center;font-size:.73em;color:var(--dim);line-height:1.6;position:relative;z-index:1}
+.stepper-wrap{max-width:860px;margin:28px auto 0;padding:0 24px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;position:relative;z-index:1}
+.stepper-wrap::-webkit-scrollbar{display:none}
+.stepper{display:flex;align-items:flex-start;justify-content:center;gap:0;min-width:min-content}
+.sec{display:flex;flex-direction:column;align-items:center;gap:8px}
+.sec-dots{display:flex;align-items:center;gap:0}
+.sec-label{font-size:.6em;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--dim)}
+.dot{width:34px;height:34px;border-radius:50%;border:2.5px solid var(--bdr);background:var(--card);display:flex;align-items:center;justify-content:center;font-size:.68em;font-weight:700;color:var(--dim);cursor:pointer;transition:all .35s cubic-bezier(.4,0,.2,1);flex-shrink:0;position:relative;z-index:1;box-shadow:var(--shadow-sm)}
+.dot:hover{border-color:var(--c,var(--amber));color:var(--c,var(--amber));transform:scale(1.08)}
+.dot.on{border-color:var(--c);background:var(--c);color:#fff;transform:scale(1.2);box-shadow:var(--shadow-dot) var(--g,var(--amberg));animation:dot-pulse 2s cubic-bezier(.4,0,.6,1) infinite}
+.dot.ok{border-color:var(--green);background:var(--green);color:#fff;transform:scale(1);animation:none}
+@keyframes dot-pulse{0%,100%{box-shadow:var(--shadow-dot) var(--g),0 0 0 0 var(--g)}50%{box-shadow:var(--shadow-dot) var(--g),0 0 0 6px transparent}}
+.ln{width:16px;height:2.5px;background:var(--bdr);flex-shrink:0;transition:background .4s cubic-bezier(.4,0,.2,1);border-radius:2px}
+.ln.ok{background:var(--green)}
+.gap{width:22px;flex-shrink:0}
+.card-wrap{max-width:800px;margin:26px auto 0;padding:0 24px;position:relative;z-index:1}
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:18px;box-shadow:var(--shadow-card);position:relative;overflow:hidden;min-height:440px;display:flex;flex-direction:column;transition:box-shadow .4s}
+.card::after{content:'';position:absolute;top:0;left:0;right:0;height:120px;background:linear-gradient(180deg,var(--tint,rgba(217,119,6,.03)),transparent);pointer-events:none;border-radius:18px 18px 0 0;transition:background .5s}
+.card-color{position:absolute;top:0;left:0;right:0;height:3px;background:var(--sc,var(--amber));transition:background .4s;z-index:2;border-radius:18px 18px 0 0}
+.slides{flex:1;position:relative;overflow:hidden;z-index:1}
+.sl{position:absolute;inset:0;padding:36px 40px;overflow-y:auto;opacity:0;pointer-events:none;scrollbar-width:thin;scrollbar-color:var(--bdr) transparent}
+.sl::-webkit-scrollbar{width:5px} .sl::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}
+.sl.on{opacity:1;pointer-events:auto;position:relative}
+.sl.enter-r{animation:enterR .42s cubic-bezier(.4,0,.2,1)}
+.sl.enter-l{animation:enterL .42s cubic-bezier(.4,0,.2,1)}
+@keyframes enterR{from{opacity:0;transform:translateX(50px) scale(.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes enterL{from{opacity:0;transform:translateX(-50px) scale(.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+.sl-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.sl-phase{font-size:.67em;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--sc,var(--amber));background:var(--sl,var(--amberl));padding:4px 12px;border-radius:6px}
+.sl-num{font-size:.72em;color:var(--dim);font-weight:600;font-variant-numeric:tabular-nums}
+.sl h2{font-size:1.4em;color:var(--bright);font-weight:750;letter-spacing:-.02em;margin-bottom:12px;line-height:1.3}
+.sl-desc{font-size:.95em;line-height:1.75;margin-bottom:18px}
+.sl-detail{font-size:.88em;line-height:1.8;color:var(--dim);border-top:1px solid var(--bdr);padding-top:18px}
+.sl.on .sl-detail{color:var(--text)}
+.sl-detail p{margin-bottom:12px} .sl-detail p:last-child{margin-bottom:0}
+.callout{margin:18px 0 8px;padding:16px 20px;border-radius:12px;font-size:.93em;line-height:1.7;border-left:3.5px solid var(--sc,var(--amber));background:var(--sl,var(--amberl))}
+.callout strong{color:var(--sc,var(--amber))}
+.api-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.api-item{padding:6px 10px;border-radius:6px;background:var(--code-bg);font-family:'JetBrains Mono',Consolas,monospace;font-size:.82em}
+.api-item .af{color:var(--code-c);font-weight:600}
+.api-item .ad{color:var(--dim);font-size:.9em}
+.result-box{margin-top:16px;padding:14px 20px;border-radius:10px;background:var(--greenl);font-family:'JetBrains Mono','SF Mono',Consolas,monospace;font-size:.84em;font-weight:500;color:var(--green);border:1px solid rgba(22,163,74,.12);white-space:pre-line;line-height:1.8}
+.card-nav{display:flex;justify-content:space-between;align-items:center;padding:16px 32px;border-top:1px solid var(--bdr);background:var(--card-footer);border-radius:0 0 18px 18px;position:relative;z-index:1}
+.nbtn{background:none;border:1px solid var(--bdr);color:var(--text);padding:9px 22px;border-radius:10px;cursor:pointer;font-size:.82em;font-family:inherit;font-weight:600;transition:all .2s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;gap:6px}
+.nbtn:hover{border-color:var(--amber);color:var(--amber);background:var(--amberl);transform:translateY(-1px)}
+.nbtn:disabled{opacity:.25;cursor:default;transform:none;border-color:var(--bdr);color:var(--dim);background:none}
+.auto-ctrl{display:flex;align-items:center;gap:6px}
+.abtn{width:36px;height:36px;border-radius:50%;border:1px solid var(--bdr);background:var(--card);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.8em;color:var(--text);transition:all .2s cubic-bezier(.4,0,.2,1)}
+.abtn:hover{border-color:var(--amber);color:var(--amber);transform:translateY(-1px)}
+.abtn.on{background:var(--amber);border-color:var(--amber);color:#fff;box-shadow:0 2px 8px var(--amberg)}
+.spd-wrap{display:flex;align-items:center;gap:6px;margin-left:6px}
+.spd-wrap span{font-size:.65em;color:var(--dim);font-weight:500}
+.spd-wrap input{width:64px;accent-color:var(--amber);cursor:pointer}
+footer{text-align:center;padding:28px 24px 36px;font-size:.74em;color:var(--dim);max-width:800px;margin:20px auto 0;position:relative;z-index:1}
+footer a{color:var(--amber);text-decoration:none;font-weight:500} footer a:hover{text-decoration:underline}
+.keys{margin-bottom:8px;font-weight:500}
+.keys kbd{background:var(--card);border:1px solid var(--bdr);border-radius:5px;padding:3px 7px;font-family:inherit;font-size:.92em;margin:0 2px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+@media(max-width:640px){
+  .hdr{padding:36px 16px 10px} .hdr h1{font-size:1.4em} .tbtn{top:28px;right:14px;width:34px;height:34px;border-radius:10px}
+  .dot{width:26px;height:26px;font-size:.58em;border-width:2px} .ln{width:10px} .gap{width:12px}
+  .sl{padding:24px 22px} .sl h2{font-size:1.15em} .card{min-height:380px;border-radius:14px}
+  .card::after,.card-color{border-radius:14px 14px 0 0}
+  .card-nav{padding:12px 18px;flex-wrap:wrap;gap:10px;justify-content:center;border-radius:0 0 14px 14px}
+  .sql-wrap,.sp-note,.card-wrap{padding:0 16px} .api-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>Life of a <em>Stored Procedure</em> in Comdb2</h1>
+  <p class="sub">From CREATE PROCEDURE through Lua VM execution to result emission</p>
+  <button class="tbtn" onclick="toggleTheme()" id="tbtn" title="Toggle theme">&#9790;</button>
+</div>
+
+<div class="sql-wrap">
+  <div class="sql-box">
+    <div class="sql-line"><span class="p">cdb2sql&gt;</span><span><span class="kw">EXEC PROCEDURE</span> <span class="fn">get_account</span>(<span style="color:var(--green)">42</span>)</span></div>
+  </div>
+</div>
+<div class="sp-note">
+  Stored procedures run <strong style="color:var(--text)">server-side in a Lua VM</strong>. Each SQL statement inside the SP goes through the full parse &rarr; plan &rarr; VDBE pipeline, but all execute within a single transaction &mdash; eliminating client round-trips.
+</div>
+
+<div class="stepper-wrap">
+<div class="stepper" id="stepper">
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="0" style="--c:var(--blue);--g:var(--blueg)">1</div>
+  </div><div class="sec-label">Register</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="1" style="--c:var(--cyan);--g:var(--cyang)">2</div><div class="ln" data-a="1"></div>
+    <div class="dot" data-i="2" style="--c:var(--cyan);--g:var(--cyang)">3</div>
+  </div><div class="sec-label">Invoke</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="3" style="--c:var(--purple);--g:var(--purpleg)">4</div><div class="ln" data-a="3"></div>
+    <div class="dot" data-i="4" style="--c:var(--purple);--g:var(--purpleg)">5</div><div class="ln" data-a="4"></div>
+    <div class="dot" data-i="5" style="--c:var(--purple);--g:var(--purpleg)">6</div>
+  </div><div class="sec-label">VM Setup</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="6" style="--c:var(--amber);--g:var(--amberg)">7</div><div class="ln" data-a="6"></div>
+    <div class="dot" data-i="7" style="--c:var(--amber);--g:var(--amberg)">8</div><div class="ln" data-a="7"></div>
+    <div class="dot" data-i="8" style="--c:var(--amber);--g:var(--amberg)">9</div>
+  </div><div class="sec-label">Execution</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="9" style="--c:var(--teal);--g:var(--tealg)">10</div><div class="ln" data-a="9"></div>
+    <div class="dot" data-i="10" style="--c:var(--teal);--g:var(--tealg)">11</div>
+  </div><div class="sec-label">Results</div></div>
+  <div class="gap"></div>
+  <div class="sec"><div class="sec-dots">
+    <div class="dot" data-i="11" style="--c:var(--green);--g:var(--greeng)">12</div>
+  </div><div class="sec-label">Cleanup</div></div>
+</div>
+</div>
+
+<div class="card-wrap">
+<div class="card" id="card">
+  <div class="card-color" id="ccolor"></div>
+  <div class="slides" id="slides">
+
+    <!-- 0 -->
+    <div class="sl" data-sl="0" style="--sc:var(--blue);--sl:var(--bluel)">
+      <div class="sl-top"><span class="sl-phase">Register &mdash; DDL</span><span class="sl-num">1 / 12</span></div>
+      <h2>CREATE PROCEDURE</h2>
+      <p class="sl-desc">The stored procedure source code is registered and persisted to BerkeleyDB as a schema change, making it available for execution across the cluster.</p>
+      <div class="sl-detail">
+        <p>The SQL <code>CREATE PROCEDURE procname VERSION 'v1' { ... lua source ... }</code> is parsed by <code>comdb2build.c</code>. The parser calls <code>comdb2CreateProcedure()</code> which:</p>
+        <p><strong>1.</strong> Validates authorization (<code>SQLITE_CREATE_PROC</code> permission)</p>
+        <p><strong>2.</strong> Creates a schema change request with <code>kind = SC_ADDSP</code></p>
+        <p><strong>3.</strong> Persists the Lua source to BerkeleyDB's llmeta tables</p>
+        <p>Procedures support <strong>versioning</strong> &mdash; either numeric (1, 2, 3) or string-based (<code>'v1.0'</code>, <code>'qa_release'</code>). A default version can be set with <code>PUT DEFAULT PROCEDURE procname 'version'</code>. The schema change replicates to all cluster nodes, making the SP available cluster-wide.</p>
+      </div>
+    </div>
+
+    <!-- 1 -->
+    <div class="sl" data-sl="1" style="--sc:var(--cyan);--sl:var(--cyanl)">
+      <div class="sl-top"><span class="sl-phase">Invoke &mdash; Client</span><span class="sl-num">2 / 12</span></div>
+      <h2>EXEC PROCEDURE</h2>
+      <p class="sl-desc">The client sends <code>EXEC PROCEDURE get_account(42)</code> over the newsql protobuf wire protocol, just like a regular SQL query.</p>
+      <div class="sl-detail">
+        <p>From the client's perspective, executing a stored procedure uses the same path as any SQL statement &mdash; <code>cdb2_run_statement()</code> sends the SQL text via protobuf. Service discovery, connection pooling (sockpool), and node selection all work identically.</p>
+        <p>Arguments are passed as part of the SQL text. The SP can also accept bound parameters via the standard <code>cdb2_bind_param()</code> interface.</p>
+        <p>HASQL transparent failover applies to stored procedure calls as well &mdash; if the node fails, the client retries the entire <code>EXEC PROCEDURE</code> on another node.</p>
+      </div>
+    </div>
+
+    <!-- 2 -->
+    <div class="sl" data-sl="2" style="--sc:var(--cyan);--sl:var(--cyanl)">
+      <div class="sl-top"><span class="sl-phase">Invoke &mdash; Server Dispatch</span><span class="sl-num">3 / 12</span></div>
+      <h2>Parse &amp; Route to SP Handler</h2>
+      <p class="sl-desc">The server's SQL parser recognizes <code>EXEC PROCEDURE</code> and routes execution to <code>exec_procedure()</code> in <code>sp.c</code>, bypassing the normal query planner.</p>
+      <div class="sl-detail">
+        <p>The parser identifies <code>EXEC PROCEDURE</code> as a stored procedure invocation. Instead of going through the cost-based optimizer and VDBE bytecode compilation, the request is handed to <code>exec_procedure()</code> &mdash; the main entry point for SP execution in <code>sp.c</code>.</p>
+        <p>This function extracts the SP name via <code>get_spname()</code> and parses the arguments. It then enters the SP setup and execution pipeline, which is entirely separate from the regular SQL path.</p>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="sl" data-sl="3" style="--sc:var(--purple);--sl:var(--purplel)">
+      <div class="sl-top"><span class="sl-phase">VM Setup &mdash; Cache</span><span class="sl-num">4 / 12</span></div>
+      <h2>Lua VM Cache Check</h2>
+      <p class="sl-desc"><code>setup_sp_int()</code> checks if a cached Lua VM exists for this procedure. If the SP name, version, and <code>lua_version</code> all match, the existing VM is reused.</p>
+      <div class="sl-detail">
+        <p>Comdb2 caches the Lua VM per client connection (<code>clnt-&gt;sp</code>). A cache hit requires all of:</p>
+        <p><strong>1.</strong> <code>sp-&gt;spname</code> matches the requested procedure</p>
+        <p><strong>2.</strong> <code>sp-&gt;spversion</code> (numeric or string) matches the current default version</p>
+        <p><strong>3.</strong> <code>sp-&gt;lua_version == gbl_lua_version</code> (a global counter bumped whenever any SP is modified, invalidating all cached VMs)</p>
+        <p>On a <strong>cache hit</strong>, the existing VM is reused &mdash; skipping source loading and compilation. On a <strong>cache miss</strong>, a new VM is created from scratch.</p>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="sl" data-sl="4" style="--sc:var(--purple);--sl:var(--purplel)">
+      <div class="sl-top"><span class="sl-phase">VM Setup &mdash; Compile</span><span class="sl-num">5 / 12</span></div>
+      <h2>Load Source &amp; Compile</h2>
+      <p class="sl-desc">On a cache miss, the SP source is loaded from BerkeleyDB and compiled into Lua bytecode via <code>luaL_dostring()</code>.</p>
+      <div class="sl-detail">
+        <p><code>create_sp_int()</code> creates a fresh Lua VM using <code>lua_newstate()</code> with a per-thread memory allocator (<code>mspace</code>). Then:</p>
+        <p><strong>Load source:</strong> <code>load_src()</code> retrieves the Lua source from BerkeleyDB using <code>bdb_get_sp_lua_source()</code> (numeric version) or <code>bdb_get_versioned_sp()</code> (string version). System procedures load from compiled-in sources.</p>
+        <p><strong>Compile:</strong> <code>luaL_dostring(L, src)</code> parses and compiles the Lua source into bytecode. If compilation fails, the error is returned to the client.</p>
+        <p>Standard Lua libraries are opened via <code>luaL_openlibs()</code>, and an instruction-count hook is installed to enforce execution limits.</p>
+      </div>
+    </div>
+
+    <!-- 5 -->
+    <div class="sl" data-sl="5" style="--sc:var(--purple);--sl:var(--purplel)">
+      <div class="sl-top"><span class="sl-phase">VM Setup &mdash; API</span><span class="sl-num">6 / 12</span></div>
+      <h2>Register Database API</h2>
+      <p class="sl-desc">The <code>db</code> module and all Comdb2-specific types are registered into the Lua VM, giving the SP full access to database operations.</p>
+      <div class="sl-detail">
+        <p>Several initialization functions register the SP's database API:</p>
+        <p><code>init_db_funcs()</code> &mdash; the <code>db</code> global with query, transaction, and utility functions</p>
+        <p><code>init_dbstmt_funcs()</code> &mdash; prepared statement type (<code>fetch</code>, <code>bind</code>, <code>column_value</code>, <code>emit</code>)</p>
+        <p><code>init_dbtable_funcs()</code> &mdash; temp table type (<code>insert</code>, <code>emit</code>)</p>
+        <p><code>init_dbthread_funcs()</code> &mdash; threading API (<code>create_thread</code>, <code>join</code>)</p>
+        <p><code>init_dbconsumer_funcs()</code> &mdash; queue consumer API (<code>get</code>, <code>poll</code>, <code>consume</code>)</p>
+        <p>Based on the SP type, functions are selectively added or removed: triggers get <code>add_trigger_funcs()</code> but lose <code>emit</code> and explicit transactions; consumers get <code>add_consumer_funcs()</code>.</p>
+      </div>
+    </div>
+
+    <!-- 6 -->
+    <div class="sl" data-sl="6" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Execution &mdash; Arguments</span><span class="sl-num">7 / 12</span></div>
+      <h2>Push Arguments onto Lua Stack</h2>
+      <p class="sl-desc"><code>push_args()</code> parses each argument from the <code>EXEC PROCEDURE</code> call and pushes it onto the Lua stack as a typed value.</p>
+      <div class="sl-detail">
+        <p>Arguments from <code>EXEC PROCEDURE get_account(42)</code> are parsed and pushed as Lua values:</p>
+        <p><strong>Numbers</strong> &rarr; <code>lua_pushinteger()</code> or <code>lua_pushnumber()</code></p>
+        <p><strong>Strings</strong> &rarr; <code>lua_pushstring()</code></p>
+        <p><strong>Blobs</strong> &rarr; <code>lua_pushlstring()</code> with binary data</p>
+        <p><strong>Bound parameters</strong> &rarr; extracted from the protobuf request's bind array</p>
+        <p>The SP's <code>main()</code> function receives these as its arguments: <code>function main(account_id) ... end</code>. The argument count is tracked so <code>lua_pcall()</code> knows how many values to pop.</p>
+      </div>
+    </div>
+
+    <!-- 7 -->
+    <div class="sl" data-sl="7" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Execution &mdash; main()</span><span class="sl-num">8 / 12</span></div>
+      <h2>Execute main() via lua_pcall</h2>
+      <p class="sl-desc">The SP's <code>main()</code> function is called via <code>lua_pcall()</code>. The Lua VM executes the procedure with full access to the database API.</p>
+      <div class="sl-detail">
+        <p><code>get_func_by_name()</code> retrieves the <code>main</code> function from the Lua global table (or <code>comdb2_trigger_main</code> for triggers). Then:</p>
+        <p><code>lua_pcall(lua, argcnt, LUA_MULTRET, 0)</code> executes the SP in protected mode. Any Lua error (runtime error, <code>db:emit</code> failure, constraint violation) is caught and returned to the client.</p>
+        <p>An <strong>instruction count hook</strong> fires on every Lua instruction, incrementing <code>sp-&gt;num_instructions</code>. If it exceeds <code>sp-&gt;max_num_instructions</code> (configurable via <code>db:setmaxinstructions()</code>), the SP is terminated with "Exceeded instruction quota."</p>
+        <p>During execution, the SP can call <code>db:exec()</code>, <code>db:prepare()</code>, <code>db:emit()</code>, <code>db:begin()</code>/<code>db:commit()</code>, and all other registered API functions.</p>
+      </div>
+    </div>
+
+    <!-- 8 -->
+    <div class="sl" data-sl="8" style="--sc:var(--amber);--sl:var(--amberl)">
+      <div class="sl-top"><span class="sl-phase">Execution &mdash; SQL Inside SP</span><span class="sl-num">9 / 12</span></div>
+      <h2>SQL Statements Go Through Full Pipeline</h2>
+      <p class="sl-desc">Each <code>db:exec()</code> or <code>db:prepare()</code> call inside the SP goes through the full SQL pipeline: parse &rarr; plan &rarr; VDBE &rarr; BerkeleyDB.</p>
+      <div class="sl-detail">
+        <p>When the Lua code calls <code>db:exec("SELECT balance FROM accounts WHERE id = ?")</code>, it invokes <code>lua_prepare_sql()</code> which calls into the standard SQLite/Comdb2 SQL engine:</p>
+        <p><strong>1. Parse</strong> &mdash; Lemon parser tokenizes and builds the AST</p>
+        <p><strong>2. Plan</strong> &mdash; cost-based optimizer selects indexes and generates VDBE bytecode</p>
+        <p><strong>3. Execute</strong> &mdash; VDBE interpreter steps through opcodes, accesses BerkeleyDB B-trees</p>
+        <p>For <strong>read statements</strong>, a <code>dbstmt</code> handle is returned to Lua for iteration via <code>stmt:fetch()</code>. For <strong>write statements</strong> (INSERT/UPDATE/DELETE), the statement is auto-stepped to completion and the rows-changed count is available via <code>stmt:rows_changed()</code>.</p>
+        <p>All statements execute within the SP's transaction context &mdash; they see the same snapshot and their writes are part of the same atomic unit.</p>
+      </div>
+    </div>
+
+    <!-- 9 -->
+    <div class="sl" data-sl="9" style="--sc:var(--teal);--sl:var(--teall)">
+      <div class="sl-top"><span class="sl-phase">Results &mdash; Transactions</span><span class="sl-num">10 / 12</span></div>
+      <h2>Transaction Semantics</h2>
+      <p class="sl-desc">The SP can explicitly manage transactions with <code>db:begin()</code>, <code>db:commit()</code>, and <code>db:rollback()</code>, or run within an implicit parent transaction.</p>
+      <div class="sl-detail">
+        <p>Transaction control follows a state machine: <code>NORMAL</code> &rarr; <code>PRE_STRT</code> &rarr; <code>INTRANS</code> &rarr; <code>FNSH</code> &rarr; <code>NORMAL</code>.</p>
+        <p><strong>Explicit transactions:</strong> The SP calls <code>db:begin()</code> to start, executes multiple SQL statements, then <code>db:commit()</code> or <code>db:rollback()</code>. All statements between begin and commit are atomic.</p>
+        <p><strong>Commit with effects:</strong> <code>db:commit({with_effects=true})</code> returns a table with <code>num_affected</code>, <code>num_selected</code>, <code>num_inserted</code>, <code>num_updated</code>, <code>num_deleted</code> &mdash; giving the SP visibility into what the transaction did.</p>
+        <p><strong>Error rollback:</strong> If the SP throws an uncaught error while a transaction is active, <code>db_rollback_int()</code> automatically aborts the transaction before returning the error to the client.</p>
+        <p>On commit, the write path is the same as for regular queries: log records are generated, replicated to the cluster, and the commit waits for majority ack.</p>
+      </div>
+    </div>
+
+    <!-- 10 -->
+    <div class="sl" data-sl="10" style="--sc:var(--teal);--sl:var(--teall)">
+      <div class="sl-top"><span class="sl-phase">Results &mdash; Emission</span><span class="sl-num">11 / 12</span></div>
+      <h2>Result Emission via db:emit()</h2>
+      <p class="sl-desc">The SP sends result rows back to the client by calling <code>db:emit()</code>. Results are streamed incrementally as they are produced.</p>
+      <div class="sl-detail">
+        <p><code>db:emit()</code> is polymorphic &mdash; it handles multiple input types:</p>
+        <p><strong>Individual values:</strong> <code>db:emit(name, balance)</code> &rarr; sends one row with positional columns</p>
+        <p><strong>Lua table:</strong> <code>db:emit({name="Alice", balance=10042.50})</code> &rarr; sends one row with named columns</p>
+        <p><strong>dbstmt:</strong> <code>stmt:emit()</code> &rarr; streams all result rows from a prepared statement</p>
+        <p><strong>dbtable:</strong> <code>tbl:emit()</code> &rarr; sends all rows from a temp table</p>
+        <p>Column metadata is set via <code>db:column_name()</code> and <code>db:column_type()</code> before the first <code>emit</code>. Internally, <code>l_send_back_row()</code> serializes the row and calls <code>write_response(clnt, RESPONSE_ROW, ...)</code> to stream it over the protobuf wire protocol. The client receives rows via the normal <code>cdb2_next_record()</code> loop.</p>
+        <p><code>db:emiterror(msg)</code> sends an error message to the client without terminating the SP.</p>
+      </div>
+    </div>
+
+    <!-- 11 -->
+    <div class="sl" data-sl="11" style="--sc:var(--green);--sl:var(--greenl)">
+      <div class="sl-top"><span class="sl-phase">Cleanup &mdash; Finalize</span><span class="sl-num">12 / 12</span></div>
+      <h2>Cleanup &amp; Finalize</h2>
+      <p class="sl-desc">After <code>main()</code> returns, the SP's return value is processed, resources are cleaned up, and the final response is sent to the client.</p>
+      <div class="sl-detail">
+        <p><strong>Return value:</strong> <code>emit_result()</code> inspects what <code>main()</code> returned on the Lua stack &mdash; a number becomes a return code (range -299 to -200), a string becomes an error message, a table is emitted as additional result rows.</p>
+        <p><strong>Transaction check:</strong> <code>commit_sp()</code> verifies all transactions were properly terminated. An open transaction at SP exit is an error.</p>
+        <p><strong>Flush:</strong> <code>flush_sp()</code> sends <code>RESPONSE_ROW_LAST</code> to signal the client that all rows have been sent.</p>
+        <p><strong>Resource cleanup:</strong></p>
+        <p>&bull; <code>reset_sp()</code> &mdash; resets SP state for potential VM reuse on the next call</p>
+        <p>&bull; <code>lua_gc(L, LUA_GCCOLLECT, 0)</code> &mdash; runs a full Lua garbage collection cycle</p>
+        <p>&bull; <code>drop_temp_tables()</code> &mdash; deletes any temporary tables created by the SP</p>
+        <p>&bull; <code>free_tmptbls()</code> &mdash; frees temp table tracking structures</p>
+        <p>The Lua VM is <strong>not destroyed</strong> &mdash; it is cached on <code>clnt-&gt;sp</code> for reuse if the same SP is called again on this connection.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card-nav">
+    <button class="nbtn" id="prev-btn" onclick="back()" disabled>&larr; Back</button>
+    <div class="auto-ctrl">
+      <button class="abtn" id="play-btn" onclick="play()" title="Play">&#9654;</button>
+      <button class="abtn" id="pause-btn" onclick="pause()" title="Pause">&#10074;&#10074;</button>
+      <button class="abtn" onclick="doReset()" title="Reset">&#8634;</button>
+      <div class="spd-wrap"><span>Speed</span><input type="range" min="1" max="5" value="3" oninput="setSpd(this.value)"></div>
+    </div>
+    <button class="nbtn" id="next-btn" onclick="fwd()">Next &rarr;</button>
+  </div>
+</div>
+</div>
+
+<footer>
+  <div class="keys"><kbd>Space</kbd> Play / Pause &nbsp;&middot;&nbsp; <kbd>&larr;</kbd> <kbd>&rarr;</kbd> Step &nbsp;&middot;&nbsp; <kbd>R</kbd> Reset</div>
+  <a href="comdb2-query-lifecycle.html">Life of a Query</a> &middot;
+  <a href="comdb2-expert-mode.html">Expert Mode</a> &middot;
+  <a href="index.html">mohitkhullar.github.io</a>
+</footer>
+
+<script>
+(function(){
+  const d=document.documentElement,s=localStorage.getItem('cdb2t');
+  if(s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches)) d.classList.add('dark');
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',e=>{if(!localStorage.getItem('cdb2t')){d.classList.toggle('dark',e.matches);ic();}});
+  ic();
+})();
+function toggleTheme(){document.documentElement.classList.toggle('dark');localStorage.setItem('cdb2t',document.documentElement.classList.contains('dark')?'dark':'light');ic();}
+function ic(){document.getElementById('tbtn').textContent=document.documentElement.classList.contains('dark')?'☀':'☾'}
+
+const dots=document.querySelectorAll('.dot'),lns=document.querySelectorAll('.ln'),sls=document.querySelectorAll('.sl');
+const ccolor=document.getElementById('ccolor'),card=document.getElementById('card'),N=sls.length;
+let cur=0,playing=false,tmr=null,spd=30000;
+
+const tints=[
+  'rgba(37,99,235,.04)',
+  'rgba(8,145,178,.04)','rgba(8,145,178,.04)',
+  'rgba(124,58,237,.04)','rgba(124,58,237,.04)','rgba(124,58,237,.04)',
+  'rgba(217,119,6,.04)','rgba(217,119,6,.04)','rgba(217,119,6,.04)',
+  'rgba(13,148,136,.04)','rgba(13,148,136,.04)',
+  'rgba(22,163,74,.04)'
+];
+const secColors=[
+  'var(--blue)',
+  'var(--cyan)','var(--cyan)',
+  'var(--purple)','var(--purple)','var(--purple)',
+  'var(--amber)','var(--amber)','var(--amber)',
+  'var(--teal)','var(--teal)',
+  'var(--green)'
+];
+
+function show(idx,dir){
+  dir=dir||'r';cur=idx;
+  dots.forEach(dt=>{const i=+dt.dataset.i;dt.classList.toggle('on',i===cur);dt.classList.toggle('ok',i<cur);});
+  lns.forEach(l=>{l.classList.toggle('ok',+l.dataset.a<cur);});
+  sls.forEach(s=>{s.classList.remove('on','enter-r','enter-l');s.style.display='none';});
+  const sl=sls[cur];sl.style.display='block';void sl.offsetWidth;
+  sl.classList.add('on',dir==='r'?'enter-r':'enter-l');
+  ccolor.style.background=secColors[cur];
+  card.style.setProperty('--tint',tints[cur]);
+  document.getElementById('prev-btn').disabled=(cur===0);
+  document.getElementById('next-btn').disabled=(cur===N-1);
+  dots[cur].scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+}
+function fwd(){if(cur<N-1)show(cur+1,'r');else pause();}
+function back(){if(cur>0)show(cur-1,'l');}
+function play(){playing=true;document.getElementById('play-btn').classList.add('on');document.getElementById('pause-btn').classList.remove('on');if(cur>=N-1){cur=-1;show(0,'r');}tick();}
+function pause(){playing=false;clearTimeout(tmr);document.getElementById('play-btn').classList.remove('on');document.getElementById('pause-btn').classList.add('on');}
+function doReset(){pause();show(0,'r');}
+function tick(){if(!playing)return;tmr=setTimeout(()=>{if(cur<N-1){fwd();tick();}else{playing=false;document.getElementById('play-btn').classList.remove('on');}},spd);}
+function setSpd(v){spd=[60000,45000,30000,18000,10000][v-1];}
+dots.forEach(d=>d.addEventListener('click',()=>{pause();const i=+d.dataset.i;show(i,i>cur?'r':'l');}));
+document.addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();playing?pause():play();}
+  if(e.key==='ArrowRight'){e.preventDefault();pause();fwd();}
+  if(e.key==='ArrowLeft'){e.preventDefault();pause();back();}
+  if(e.key==='r'||e.key==='R'){e.preventDefault();doReset();}
+});
+show(0,'r');setTimeout(play,1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Berkeley DB Write-Ahead Logging in Comdb2</title>
+<style>
+:root {
+  --bg:#f8fafb; --bg-top:rgba(37,99,235,.02); --card:#fff; --card-footer:#f9fafb;
+  --bdr:#e5e9f0; --text:#2d3748; --dim:#8896a7; --bright:#111827;
+  --shadow-card:0 2px 4px rgba(0,0,0,.02),0 12px 28px rgba(0,0,0,.045),0 28px 64px rgba(0,0,0,.04);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);
+  --code-bg:#f0f4f8; --code-c:#5046e5;
+  --blue:#2563eb; --bluel:rgba(37,99,235,.06); --blueg:rgba(37,99,235,.22);
+  --cyan:#0891b2; --cyanl:rgba(8,145,178,.06); --cyang:rgba(8,145,178,.22);
+  --purple:#7c3aed; --purplel:rgba(124,58,237,.06); --purpleg:rgba(124,58,237,.22);
+  --amber:#d97706; --amberl:rgba(217,119,6,.06); --amberg:rgba(217,119,6,.22);
+  --red:#dc2626; --redl:rgba(220,38,38,.06); --redg:rgba(220,38,38,.22);
+  --green:#16a34a; --greenl:rgba(22,163,74,.06); --greeng:rgba(22,163,74,.22);
+  --teal:#0d9488; --teall:rgba(13,148,136,.06); --tealg:rgba(13,148,136,.22);
+}
+:root.dark {
+  --bg:#0b1222; --bg-top:rgba(59,130,246,.03); --card:#14202f; --card-footer:#111c2b;
+  --bdr:#1e3050; --text:#c4d0dc; --dim:#607080; --bright:#ecf2f8;
+  --shadow-card:0 2px 4px rgba(0,0,0,.2),0 12px 28px rgba(0,0,0,.25),0 28px 64px rgba(0,0,0,.2);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.3),0 4px 12px rgba(0,0,0,.2);
+  --code-bg:rgba(80,70,229,.12); --code-c:#a5b4fc;
+  --blue:#3b82f6; --bluel:rgba(59,130,246,.1); --blueg:rgba(59,130,246,.3);
+  --cyan:#06b6d4; --cyanl:rgba(6,182,212,.1); --cyang:rgba(6,182,212,.3);
+  --purple:#a855f7; --purplel:rgba(168,85,247,.1); --purpleg:rgba(168,85,247,.3);
+  --amber:#f59e0b; --amberl:rgba(245,158,11,.1); --amberg:rgba(245,158,11,.3);
+  --red:#ef4444; --redl:rgba(239,68,68,.1); --redg:rgba(239,68,68,.3);
+  --green:#22c55e; --greenl:rgba(34,197,94,.1); --greeng:rgba(34,197,94,.3);
+  --teal:#2dd4bf; --teall:rgba(45,212,191,.1); --tealg:rgba(45,212,191,.3);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;font-size:15px;line-height:1.6;min-height:100vh;transition:background .3s,color .3s;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:500px;background:radial-gradient(ellipse 80% 50% at 50% -10%,var(--bg-top),transparent);pointer-events:none;z-index:0}
+code{font-family:'JetBrains Mono','SF Mono','Cascadia Code','Fira Code',Consolas,monospace;background:var(--code-bg);color:var(--code-c);padding:2px 7px;border-radius:5px;font-size:.84em;font-weight:500}
+pre{background:var(--code-bg);padding:12px 14px;border-radius:8px;overflow-x:auto;margin:12px 0}
+pre code{background:none;padding:0;color:inherit}
+.hdr{text-align:center;padding:48px 24px 14px;position:relative;z-index:1}
+.hdr h1{font-size:2rem;color:var(--bright);font-weight:800;letter-spacing:-.04em;line-height:1.2}
+.hdr h1 em{color:var(--purple);font-style:normal}
+.hdr .sub{color:var(--dim);font-size:.9em;margin-top:8px;line-height:1.6}
+.tbtn{position:absolute;top:40px;right:28px;width:40px;height:40px;border-radius:12px;border:1px solid var(--bdr);background:var(--card);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.15em;color:var(--text);transition:all .2s cubic-bezier(.4,0,.2,1);box-shadow:var(--shadow-sm)}
+.tbtn:hover{border-color:var(--purple);color:var(--purple);transform:translateY(-1px);box-shadow:var(--shadow-sm),0 4px 12px var(--purpleg)}
+.wrap{max-width:900px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+.section{margin-top:48px}
+.section h2{font-size:1.4rem;color:var(--bright);font-weight:700;margin-bottom:16px;margin-top:24px}
+.section h3{font-size:1.1rem;color:var(--bright);font-weight:600;margin-top:20px;margin-bottom:12px}
+.section p{color:var(--text);margin-bottom:12px;line-height:1.7}
+.card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:20px;margin:16px 0;box-shadow:var(--shadow-card);transition:all .2s}
+.card:hover{border-color:var(--purple);box-shadow:var(--shadow-card),0 8px 16px var(--purpleg)}
+.card h4{color:var(--bright);font-weight:600;margin-bottom:8px}
+.card p{font-size:.95em;color:var(--dim)}
+.table-wrap{overflow-x:auto;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:.95em}
+th{background:var(--bluel);color:var(--blue);padding:10px 12px;text-align:left;font-weight:600;border-bottom:2px solid var(--bdr)}
+td{padding:10px 12px;border-bottom:1px solid var(--bdr)}
+tr:hover{background:var(--card-footer)}
+.badge{display:inline-block;padding:4px 8px;border-radius:4px;font-size:.85em;font-weight:500;margin-right:6px;margin-bottom:6px}
+.badge-blue{background:var(--bluel);color:var(--blue)}
+.badge-purple{background:var(--purplel);color:var(--purple)}
+.badge-cyan{background:var(--cyanl);color:var(--cyan)}
+.badge-amber{background:var(--amberl);color:var(--amber)}
+.badge-red{background:var(--redl);color:var(--red)}
+.badge-green{background:var(--greenl);color:var(--green)}
+.highlight{background:var(--purplel);padding:2px 6px;border-radius:3px;color:var(--purple);font-weight:500}
+.sidebar{display:none}
+ul{margin-left:24px;margin-bottom:12px}
+ul li{margin-bottom:6px;color:var(--text)}
+strong{color:var(--bright);font-weight:600}
+a{color:var(--blue);text-decoration:none;transition:color .2s}
+a:hover{color:var(--purple)}
+.lsn{font-family:monospace;background:var(--code-bg);padding:2px 5px;border-radius:3px;font-size:.9em}
+.diagram{background:var(--card);border:1px solid var(--bdr);border-radius:8px;padding:20px;margin:16px 0;font-family:monospace;font-size:.9em;overflow-x:auto;line-height:1.8;color:var(--dim)}
+.toc{background:var(--card);border:1px solid var(--bdr);border-radius:8px;padding:20px;margin:24px 0}
+.toc h3{margin-top:0}
+.toc ul{margin:0;padding-left:20px}
+.toc li{margin:6px 0}
+.toc a{text-decoration:none}
+footer{text-align:center;padding:40px 24px;color:var(--dim);font-size:.9em;margin-top:60px;border-top:1px solid var(--bdr)}
+</style>
+<script>
+function toggleDarkMode() {
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+}
+if (localStorage.getItem('darkMode') === 'true') {
+  document.documentElement.classList.add('dark');
+}
+</script>
+</head>
+<body>
+
+<button class="tbtn" onclick="toggleDarkMode()" title="Toggle dark mode">🌙</button>
+
+<div class="hdr">
+  <h1>Berkeley DB <em>Write-Ahead Logging</em> in Comdb2</h1>
+  <p class="sub">Understanding the log architecture, record types, transactions, and recovery mechanisms</p>
+</div>
+
+<div class="wrap">
+
+<div class="toc">
+  <h3>Quick Navigation</h3>
+  <ul>
+    <li><a href="#overview">Overview & Architecture</a></li>
+    <li><a href="#lsn">Log Sequence Numbers (LSN)</a></li>
+    <li><a href="#record-types">Record Types & Operations</a></li>
+    <li><a href="#transactions">Transaction Lifecycle</a></li>
+    <li><a href="#checkpoints">Checkpoints & Recovery</a></li>
+    <li><a href="#replication">Replication Generations</a></li>
+    <li><a href="#pagelist">Pagelist File</a></li>
+    <li><a href="#file-ops">File Operations (FOPs)</a></li>
+    <li><a href="#btree-ops">B-tree Operations</a></li>
+  </ul>
+</div>
+
+<!-- OVERVIEW -->
+<div class="section" id="overview">
+  <h2>🏗️ Overview & Architecture</h2>
+
+  <p>Berkeley DB (BDB) is the storage engine underlying Comdb2. It uses a <strong>Write-Ahead Log (WAL)</strong> to ensure <strong>ACID compliance</strong> and enable recovery from crashes.</p>
+
+  <h3>Core Principles</h3>
+  <div class="card">
+    <h4>Write-Ahead Logging (WAL)</h4>
+    <p>Before any data is written to disk, a log record describing the change is written to the log file and flushed to storage. If the system crashes, replay the log to recover uncommitted state.</p>
+  </div>
+
+  <div class="card">
+    <h4>Physical vs. Logical Logging</h4>
+    <p><strong>Physical logging:</strong> Records the byte-level changes to a page (e.g., "page 5, offset 100-200, write N bytes"). Used by Berkeley DB for low-level B-tree structural operations (__bam_split, __db_addrem, etc.). Physical records must be replayed in order and are page-specific.<br>
+    <strong>Logical logging:</strong> Records the user-level intent of the operation (e.g., "insert row with key X and value Y", or "create table with columns X, Y, Z"). Comdb2 uses logical records for schema changes (CREATE TABLE, ALTER TABLE, DROP TABLE) wrapped in logical transactions. Logical records can be replayed independently and don't depend on exact page layout — essential for replicants to apply the same operation even with different B-tree structure.</p>
+  </div>
+
+  <div class="card">
+    <h4>Durability via Checkpoints</h4>
+    <p>A checkpoint marks a stable point in the log where all dirty pages up to that point have been flushed to disk. During recovery, replay only begins from the last checkpoint, not from the start of the log.</p>
+  </div>
+
+  <div class="card">
+    <h4>Multi-Version Consistency via LSN</h4>
+    <p>Snapshot isolation in Comdb2 is implemented using LSNs. When a read transaction starts, it captures the current LSN as its snapshot point. All data changes logged at LSNs after the snapshot point are invisible to this reader — it sees a consistent historical view of the database as it existed when the snapshot was taken. Concurrent writes produce newer LSN records, but don't affect snapshot-isolated readers.</p>
+  </div>
+
+  <h3>Log File Structure</h3>
+  <div class="diagram">
+┌─────────────────────────────────────┐
+│  log.00000001 (Berkeley DB log)     │
+├─────────────────────────────────────┤
+│ Offset [1][28]   → __txn_recycle    │
+│ Offset [1][72]   → __db_debug       │
+│ Offset [1][132]  → __txn_ckp        │
+│ Offset [1][200]  → __db_debug       │
+│ Offset [1][256]  → __fop_create     │
+│ Offset [1][314]  → __fop_write      │
+│        ...                           │
+│ Offset [1][9999] → __txn_regop_gen  │
+│        ...                           │
+└─────────────────────────────────────┘
+
+Each record has a header specifying:
+  - Record type (rec: 2011 for checkpoint)
+  - Transaction ID (txnid)
+  - Previous LSN (prevlsn) for chaining
+  </div>
+
+</div>
+
+<!-- LSN -->
+<div class="section" id="lsn">
+  <h2>📍 Log Sequence Numbers (LSN)</h2>
+
+  <p>An LSN is the <strong>unique identifier</strong> for every log record, expressed as <span class="lsn">[file_number][byte_offset]</span>.</p>
+
+  <h3>Structure</h3>
+  <div class="card">
+    <h4>Format: [file_number][byte_offset]</h4>
+    <p>Example: <span class="lsn">[1][1274336]</span></p>
+    <ul>
+      <li><strong>file_number:</strong> Which log file (1 = log.00000001, 2 = log.00000002, etc.)</li>
+      <li><strong>byte_offset:</strong> Byte offset within that file where the record starts</li>
+    </ul>
+  </div>
+
+  <h3>Purpose</h3>
+  <ul>
+    <li><strong>Chronological ordering:</strong> Later operations have higher LSNs. A transaction at LSN [1][5000] happened before one at [1][6000]</li>
+    <li><strong>Transaction chaining:</strong> Each record points to its predecessor via prevlsn, forming a linked list backward in time</li>
+    <li><strong>Checkpoint tracking:</strong> Checkpoints record ckp_lsn, the LSN of the oldest active (uncommitted) transaction at checkpoint time. All transactions before ckp_lsn are guaranteed committed and durable on disk</li>
+    <li><strong>Recovery starting point:</strong> On crash, recovery begins from ckp_lsn, not from the log beginning. This is safe because all transactions before ckp_lsn are already on stable storage</li>
+    <li><strong>Multi-version consistency:</strong> Snapshot-isolated reads use LSN as the snapshot point — a read at LSN [1][5000] sees all commits up to that LSN, but no later ones</li>
+  </ul>
+
+  <h3>Example Transaction Chain</h3>
+  <div class="diagram">
+Record 1: [1][256] __fop_create (prevlsn [0][0])
+            ↓
+Record 2: [1][314] __fop_write (prevlsn [1][256])
+            ↓
+Record 3: [1][4484] __fop_write (prevlsn [1][314])
+            ↓
+Record 4: [1][8654] __fop_rename (prevlsn [1][4484])
+
+Each record points backward to its predecessor,
+enabling efficient forward replay during recovery.
+  </div>
+
+</div>
+
+<!-- RECORD TYPES -->
+<div class="section" id="record-types">
+  <h2>📋 Record Types & Operations</h2>
+
+  <p>The Berkeley DB log contains dozens of record types. Here are the most important for understanding Comdb2:</p>
+
+  <h3>Transaction Management Records</h3>
+
+  <div class="card">
+    <h4>__txn_ckp (Checkpoint)</h4>
+    <p><span class="badge badge-blue">Rectype: 2011</span></p>
+    <p>Marks a stable point where all dirty pages have been flushed to disk.</p>
+    <ul>
+      <li><code>ckp_lsn</code>: Oldest active transaction's LSN (point to start replay from)</li>
+      <li><code>last_ckp</code>: Previous checkpoint LSN</li>
+      <li><code>timestamp</code>: When checkpoint occurred</li>
+      <li><code>rep_gen</code>: Replication generation (increments on master election)</li>
+      <li><code>max_utxnid</code>: Highest transaction ID committed so far</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>__txn_ckp_recovery (Checkpoint During Recovery)</h4>
+    <p><span class="badge badge-blue">Rectype: 2020</span></p>
+    <p>Written when a node recovers and redoes the log. Marks a safe stopping point.</p>
+  </div>
+
+  <div class="card">
+    <h4>__txn_recycle (Transaction ID Recycle)</h4>
+    <p><span class="badge badge-blue">Rectype: 2014</span></p>
+    <p>After a checkpoint, recycle the transaction ID space (min/max range). Essential for 32-bit txnid wraparound.</p>
+  </div>
+
+  <div class="card">
+    <h4>__txn_regop_gen (Transaction Commit — Generation Format)</h4>
+    <p><span class="badge badge-blue">Rectype: 2016</span></p>
+    <p>Marks a user transaction commit. Modern format including replication generation.</p>
+    <ul>
+      <li><code>opcode: 1</code> = commit (abort would be different code)</li>
+      <li><code>generation</code>: Replication generation at commit time</li>
+      <li><code>timestamp</code>: Commit timestamp</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>__txn_regop_gen_endianize (Transaction Commit — Endianized)</h4>
+    <p><span class="badge badge-blue">Rectype: 2151</span></p>
+    <p>Enhanced commit record with endian markers and additional context for cross-architecture replication.</p>
+  </div>
+
+  <div class="card">
+    <h4>__txn_regop_rowlocks_endianize (Logical Transaction Commit)</h4>
+    <p><span class="badge badge-blue">Rectype: 2150</span></p>
+    <p>Used for schema change transactions. Includes row lock context and logical transaction ID.</p>
+    <ul>
+      <li><code>ltranid</code>: Logical transaction ID (e.g., for schema operations)</li>
+      <li><code>begin_lsn</code>: Where this logical txn started</li>
+      <li><code>lflags</code>: Logical flags indicating transaction properties</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>__txn_child (Child Transaction Link)</h4>
+    <p><span class="badge badge-blue">Rectype: 2012</span></p>
+    <p>When a parent transaction spawns child transactions, records the parent-child relationship.</p>
+  </div>
+
+  <h3>Data Modification Records</h3>
+
+  <div class="card">
+    <h4>__db_addrem (Add/Remove Record)</h4>
+    <p><span class="badge badge-green">Rectype: 3041</span></p>
+    <p>This is a PHYSICAL log record. It records a byte-level modification to a B-tree page: adding or removing a record within the page structure (not the whole record bytes, but the metadata for where it lives on the page).</p>
+    <ul>
+      <li><code>opcode: 1</code> = add record to page, <code>2</code> = remove record from page</li>
+      <li><code>fileid</code>: Which file (table/index) this operation affects</li>
+      <li><code>pgno</code>: Page number within that file</li>
+      <li><code>indx</code>: Slot index within the page where the record lives</li>
+      <li><code>nbytes</code>: Size of the record being added/removed</li>
+      <li><code>data</code>: If add, includes the actual record bytes being inserted</li>
+    </ul>
+    <p><strong>Critical:</strong> This record is page-specific. If a replica has a different page layout (e.g., due to earlier splits/merges), it cannot blindly replay __db_addrem. The replicant may need to navigate to the same logical position differently. This is why logical transaction wrappers (schema changes) exist — they're layout-independent.</p>
+  </div>
+
+  <div class="card">
+    <h4>__bam_split (B-tree Page Split)</h4>
+    <p><span class="badge badge-green">Rectype: 3062</span></p>
+    <p>When a B-tree page becomes full, split it into left and right pages. Records the split operation.</p>
+    <ul>
+      <li><code>left / right</code>: Page IDs of left and right children</li>
+      <li><code>indx</code>: Index of the split point</li>
+      <li><code>root_pgno</code>: Root page of the tree</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>__bam_rsplit (B-tree Reverse Split)</h4>
+    <p><span class="badge badge-green">Rectype: 3063</span></p>
+    <p>Opposite of split: merge pages back together when they become too sparse.</p>
+  </div>
+
+  <div class="card">
+    <h4>__bam_cdel (B-tree Cursor Delete)</h4>
+    <p><span class="badge badge-green">Rectype: 3057</span></p>
+    <p>Mark a record as deleted without immediately removing it (logical delete for MVCC).</p>
+  </div>
+
+  <div class="card">
+    <h4>__bam_repl (B-tree Record Replace)</h4>
+    <p><span class="badge badge-green">Rectype: 3058</span></p>
+    <p>Replace a record in place (used for UPDATE operations that don't change key).</p>
+  </div>
+
+  <h3>File Operation Records</h3>
+
+  <div class="card">
+    <h4>__fop_create (Create File)</h4>
+    <p><span class="badge badge-amber">Rectype: 2143</span></p>
+    <p>Begin physical file creation.</p>
+    <ul>
+      <li><code>name</code>: Temporary filename (e.g., __db.1.abc)</li>
+      <li><code>mode</code>: File permissions (e.g., 0666)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>__fop_write (Write File)</h4>
+    <p><span class="badge badge-amber">Rectype: 2145</span></p>
+    <p>Write page data to a file (during initial file setup).</p>
+    <ul>
+      <li><code>pgsize</code>: Page size (typically 4096 bytes)</li>
+      <li><code>pageno / offset</code>: Which page and byte offset</li>
+      <li><code>page</code>: The actual page data (hex dump)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>__fop_rename (Rename File)</h4>
+    <p><span class="badge badge-amber">Rectype: 2146</span></p>
+    <p>Rename temporary file to permanent name (atomic creation).</p>
+  </div>
+
+  <h3>Registry Records</h3>
+
+  <div class="card">
+    <h4>__dbreg_register (Database Registration)</h4>
+    <p><span class="badge badge-cyan">Rectype: 2002</span></p>
+    <p>Maps a physical file to a logical fileid. Essential for recovery — tells the system which files to open.</p>
+    <ul>
+      <li><code>opcode: 1</code> = OPEN (first reference), <code>2</code> = CLOSE, <code>3</code> = RE-OPEN</li>
+      <li><code>name</code>: File path (e.g., XXX.sqlite_stat1_000000.datas0)</li>
+      <li><code>uid</code>: Unique identifier (40 hex chars, matches pagelist UID)</li>
+      <li><code>fileid</code>: Assigned logical ID</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>__db_debug (Debug/Marker Record)</h4>
+    <p><span class="badge badge-purple">Rectype: 2047</span></p>
+    <p>Internal marker. Often contains op codes like 0x02 (new master), used during replication and recovery.</p>
+  </div>
+
+  <h3>Comdb2-Specific (CUSTOM) Records</h3>
+
+  <div class="card">
+    <h4>CUSTOM: start (Logical Transaction Start)</h4>
+    <p><span class="badge badge-red">Rectype: 10006</span></p>
+    <p>Begins a logical (schema change) transaction.</p>
+    <ul>
+      <li><code>tranid</code>: Logical transaction ID (used for deduplication)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>CUSTOM: commit (Logical Transaction Commit)</h4>
+    <p><span class="badge badge-red">Rectype: 10005</span></p>
+    <p>Commits a logical transaction.</p>
+  </div>
+
+  <div class="card">
+    <h4>CUSTOM: add_blkseq (Add Block Sequence)</h4>
+    <p><span class="badge badge-red">Rectype: 10019</span></p>
+    <p>Record a block sequence identifier for deduplication of logical operations across replicas.</p>
+  </div>
+
+  <div class="card">
+    <h4>scdone (Schema Change Done)</h4>
+    <p><span class="badge badge-red">Rectype: 10002</span></p>
+    <p>Marks completion of a schema change operation (table create, alter, etc.).</p>
+    <ul>
+      <li><code>type</code>: Operation type (e.g., 1 = table DDL)</li>
+      <li><code>table</code>: Table name affected</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- TRANSACTIONS -->
+<div class="section" id="transactions">
+  <h2>🔄 Transaction Lifecycle</h2>
+
+  <h3>Anatomy of a User Transaction</h3>
+
+  <div class="diagram">
+BEGIN
+  ↓
+User issues: INSERT, UPDATE, DELETE
+  ↓
+For each change:
+  - Log __db_addrem (or __bam_* for btree ops)
+  - Modify page in memory buffer pool
+  - prevlsn points to previous record in transaction
+  ↓
+User issues: COMMIT
+  ↓
+Log __txn_regop_gen_endianize (or __txn_regop_gen)
+  ↓
+Flush log to disk (durability point)
+  ↓
+Return success to client
+  ↓
+Later: Checkpoint includes this transaction,
+       allowing log truncation beyond this point
+  </div>
+
+  <h3>Transaction ID (txnid)</h3>
+
+  <ul>
+    <li><strong>Format:</strong> 32-bit hex value (e.g., 0x80000001 = 2147483649)</li>
+    <li><strong>Range:</strong> 0x80000000 to 0xFFFFFFFF (starts at 2^31 by convention)</li>
+    <li><strong>Recycled:</strong> After checkpoint, __txn_recycle resets the range to allow reuse</li>
+    <li><strong>Unique Transaction ID (utxnid):</strong> Monotonically incrementing, never recycled. Useful for ordering across recycles</li>
+    <li><strong>System txnids:</strong> txnid=0 for non-transactional records (checkpoints, registry updates, debug markers)</li>
+  </ul>
+
+  <h3>Parent-Child Transactions</h3>
+
+  <p>Comdb2 uses nested transactions for table creation and schema changes:</p>
+
+  <div class="card">
+    <p><strong>Parent txn (80000004)</strong> creates a table via:</p>
+    <ol>
+      <li>Child txn (80000005) creates data file 5</li>
+      <li>Child txn (80000006) creates data file 6</li>
+      <li>Child txn (80000007) creates index file 7</li>
+      <li>... more children for more files ...</li>
+      <li>Parent txn commits, all children implicitly commit</li>
+    </ol>
+    <p>Benefits: Atomicity — either all files are created or none. If parent aborts, all children abort.</p>
+  </div>
+
+  <h3>Logical Transactions (Schema Changes)</h3>
+
+  <p>Comdb2 distinguishes between <strong>physical transactions</strong> (database engine operations like page splits) and <strong>logical transactions</strong> (user-visible schema changes). Logical transactions are critical for replication deduplication.</p>
+
+  <div class="card">
+    <p><strong>Why logical transactions?</strong></p>
+    <ul>
+      <li>Physical transactions at the master might produce different log records on the replicant due to page layout differences</li>
+      <li>A schema change like CREATE TABLE generates many physical transactions (file creates, writes, metadata updates)</li>
+      <li>If the master crashes mid-schema-change and comes back up, it re-sends the same logical operation</li>
+      <li>Without deduplication, replicas would apply it twice — corrupting the schema</li>
+      <li>Solution: Wrap logical operations in a <code>tranid</code> (logical transaction ID). Replicas remember seen tranids and skip duplicates</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <p><strong>Logical txn to create a table (on master):</strong></p>
+    <ul>
+      <li>CUSTOM: start (begins logical txn, assigns tranid=12345)</li>
+      <li>Physical txn: __fop_create, __fop_write, ... (creates data file 10)</li>
+      <li>Physical txn: __fop_create, __fop_write, ... (creates index file 11)</li>
+      <li>Physical txn: updates comdb2_metadata with schema info</li>
+      <li>CUSTOM: add_blkseq (record dedup key: tranid + blkseq)</li>
+      <li>CUSTOM: commit (end logical txn)</li>
+      <li>scdone (schema change complete)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <p><strong>Replication deduplication logic:</strong></p>
+    <ul>
+      <li>Master ships logical txn records to replicas</li>
+      <li>Replicas see CUSTOM: start with tranid=12345</li>
+      <li>Replicas check: "Have I seen tranid 12345 before?"</li>
+      <li>If yes, skip all records until CUSTOM: commit</li>
+      <li>If no, apply all physical operations and record tranid=12345 as seen</li>
+      <li>If master crashes and re-sends, replica skips it (already applied)</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- CHECKPOINTS -->
+<div class="section" id="checkpoints">
+  <h2>💾 Checkpoints & Recovery</h2>
+
+  <h3>Checkpoint Purpose</h3>
+
+  <ul>
+    <li><strong>Durability guarantee:</strong> All pages modified up to checkpoint are on disk</li>
+    <li><strong>Log truncation:</strong> Records before checkpoint can be deleted (no longer needed for recovery)</li>
+    <li><strong>Recovery optimization:</strong> Start replay from checkpoint, not from beginning of log</li>
+    <li><strong>Consistency point:</strong> Master designates the most recent stable state</li>
+  </ul>
+
+  <h3>Checkpoint Lifecycle</h3>
+
+  <div class="diagram">
+1. Identify all dirty pages (modified since last checkpoint)
+   ↓
+2. Flush all dirty pages to disk
+   (Pages must be persisted before checkpoint record is written)
+   ↓
+3. Write __txn_ckp record with:
+   - ckp_lsn: LSN of oldest active txn
+   - last_ckp: Previous checkpoint LSN
+   - rep_gen: Current replication generation
+   ↓
+4. Flush the checkpoint record to disk (durability point)
+   ↓
+5. Log records before ckp_lsn can now be deleted (old log files recycled)
+   Recovery only needs to replay from ckp_lsn forward
+  </div>
+
+  <h3>When Do Checkpoints Happen?</h3>
+
+  <ul>
+    <li><strong>Automatic periodic:</strong> Default ~60 seconds when node is active master with dirty pages</li>
+    <li><strong>On master election:</strong> Step-down checkpoint, then new-master checkpoint (rep_gen increments by 2)</li>
+    <li><strong>On recovery:</strong> Write __txn_ckp_recovery to mark end of log replay</li>
+    <li><strong>Manual:</strong> Admin can force checkpoint (less common)</li>
+  </ul>
+
+  <h3>Recovery Process</h3>
+
+  <p>When a node crashes and restarts, the recovery process rebuilds a consistent database state from the log:</p>
+
+  <div class="diagram">
+System crash occurs
+  ↓
+1. ANALYSIS PHASE:
+   - Find last checkpoint record (__txn_ckp)
+   - Scan log from that checkpoint's ckp_lsn forward to current end
+   - Identify:
+     a. "Dirty page set" — all pages modified after ckp_lsn
+     b. "Uncommitted txn set" — all txns that didn't commit before crash
+   - This phase determines what needs to be redone and undone
+  ↓
+2. REDO PHASE:
+   - Replay ALL records from ckp_lsn forward (both committed and uncommitted)
+   - For each __db_addrem, __bam_* record:
+     • Reapply the change to memory (rebuild pages to crash state)
+     • Re-link the page into B-tree structure
+   - Purpose: Restore all changes that were in memory but not yet flushed before crash
+  ↓
+3. UNDO PHASE:
+   - Walk uncommitted transactions BACKWARD in LSN order (reverse transaction order)
+   - For each modification in an uncommitted txn, generate a COMPENSATING RECORD
+   - Example: if __db_addrem with opcode=ADD appears in txn, write __db_addrem with opcode=REMOVE
+   - Write compensating records to WAL (for crash during UNDO)
+   - Purpose: Erase all uncommitted work, leaving only durable committed state
+  ↓
+4. Write __txn_ckp_recovery
+   - Marks that recovery completed successfully
+   - Includes LSN of last undo record for next recovery to skip
+  ↓
+5. Database is consistent and ready for queries
+  </div>
+
+  <h3>Why Redo Before Undo?</h3>
+  <ul>
+    <li><strong>Correctness:</strong> Redo replays all changes (committed and uncommitted) to rebuild memory state from before crash. Undo then erases only uncommitted work, leaving a clean committed state. Simple undo-only schemes lose durable data; redo-only schemes leave uncommitted garbage</li>
+    <li><strong>Efficiency:</strong> Checkpoints mark "already durable" points. Recovery only replays from checkpoint forward, not from log beginning</li>
+    <li><strong>Nested transactions:</strong> Parent-child transaction chains use prevlsn links to undo correctly in reverse order</li>
+  </ul>
+
+  <h3>pagelist File (Recovery Optimization)</h3>
+
+  <p>At checkpoint time, Comdb2 writes a <code>pagelist</code> file listing which pages were dirty:</p>
+
+  <div class="diagram">
+Format:
+  &lt;fileid&gt;  &lt;uid_hex&gt;  &lt;page_numbers...&gt;
+
+Example:
+  1  3d8fe001...  0 1 2 3 4
+  2  fb288a0a...  0 1
+
+Benefit:
+  - Recovery doesn't need to scan entire log
+  - Just process the dirty pages listed here
+  - Much faster for large logs with little activity
+  </div>
+
+</div>
+
+<!-- REPLICATION -->
+<div class="section" id="replication">
+  <h2>🔁 Replication Generations (rep_gen)</h2>
+
+  <h3>What is rep_gen?</h3>
+
+  <p><strong>Replication generation</strong> is a logical clock that increments every time a <strong>master election</strong> occurs. It helps detect which node is the current master and coordinate replicas.</p>
+
+  <h3>Master Election Flow</h3>
+
+  <div class="diagram">
+Node A (current master, rep_gen=50)
+  ↓
+Network partition / crash
+  ↓
+Node B detects master is down, wins election
+  ↓
+Node B transitions:
+  - Write checkpoint with rep_gen=50 (step-down checkpoint)
+  - Transition to master state
+  - Write checkpoint with rep_gen=51 (step-up checkpoint; rep_gen increments by 1)
+  ↓
+Remaining nodes replicate from Node B (rep_gen=51)
+  - All transactions committed under rep_gen=51 are tagged with generation=51
+  ↓
+If Node B crashes and loses to Node C:
+  Node C writes step-down checkpoint (rep_gen=51)
+  Node C transitions to master
+  Node C writes step-up checkpoint (rep_gen=52)
+  </div>
+
+  <h3>Rep Gen in Log Records</h3>
+
+  <p>Every checkpoint and many transaction records include <code>rep_gen</code>:</p>
+
+  <div class="card">
+    <p><strong>__txn_ckp</strong> on becoming master:</p>
+    <pre><code>rep_gen: 68      # This node is rep_gen 68 master</code></pre>
+  </div>
+
+  <div class="card">
+    <p><strong>__txn_regop_gen</strong> during normal operation:</p>
+    <pre><code>generation: 68   # Transaction committed under rep_gen 68</code></pre>
+  </div>
+
+  <h3>Using rep_gen for Recovery</h3>
+
+  <ul>
+    <li>If a replica receives log records with rep_gen=70 but is at rep_gen=68, it knows the master changed</li>
+    <li>Replicas must not commit transactions from older generations (they might be rolled back in another cluster branch)</li>
+    <li>A new master at rep_gen=71 sends all records tagged rep_gen=71, replicas apply those safely</li>
+  </ul>
+
+</div>
+
+<!-- PAGELIST -->
+<div class="section" id="pagelist">
+  <h2>📄 The pagelist File</h2>
+
+  <h3>Purpose & Location</h3>
+
+  <p>The <code>pagelist</code> file (located in the same directory as log files) is written at <strong>checkpoint time</strong> to optimize crash recovery.</p>
+
+  <h3>Format</h3>
+
+  <div class="diagram">
+&lt;fileid&gt;  &lt;uid&gt;  &lt;page_numbers...&gt;
+
+Example:
+1   3d8fe0010f000001edc54c66ddb31800  0 1 2 3 4
+2   fb288a0a0f000001684ef369f4e11e00  0 1
+3   438fe0010f000001edc54c665dce1e00  0 1
+...
+
+Fields:
+- fileid: Internal file ID (assigned by __dbreg_register)
+- uid: 40-character hex UID (matches __dbreg_register uid field)
+- page_numbers: Space-separated list of pages that were dirty
+  </div>
+
+  <h3>Recovery Using pagelist</h3>
+
+  <ul>
+    <li><strong>Without pagelist:</strong> Replay entire log from checkpoint, process every record</li>
+    <li><strong>With pagelist:</strong> Only process records affecting the listed dirty pages — much faster</li>
+  </ul>
+
+  <div class="card">
+    <p><strong>Example:</strong> If pagelist shows file 39 has pages [0, 1] dirty:</p>
+    <ul>
+      <li>Recovery skips all __db_addrem records for files 1-38</li>
+      <li>Only processes records modifying file 39 pages 0-1</li>
+      <li>Large log files can be skipped entirely if not listed</li>
+    </ul>
+  </div>
+
+  <h3>Lifecycle</h3>
+
+  <ul>
+    <li><strong>Written at checkpoint:</strong> Captures current dirty page set</li>
+    <li><strong>Read at recovery:</strong> Used to optimize page replay</li>
+    <li><strong>Discarded after recovery:</strong> New pagelist written at next checkpoint</li>
+  </ul>
+
+</div>
+
+<!-- FILE OPS -->
+<div class="section" id="file-ops">
+  <h2>🗂️ File Operations (FOPs)</h2>
+
+  <p>File operations (__fop_*) create, write, and rename physical data files. They follow a strict order for atomicity.</p>
+
+  <h3>File Creation Pattern</h3>
+
+  <div class="diagram">
+1. __fop_create
+   - Create temporary file: __db.1.abc
+   - mode: 666
+   ↓
+2. __fop_write (possibly multiple times)
+   - Write page 0 (metadata page)
+   - Write page 1 (first data page)
+   - etc.
+   ↓
+3. __fop_rename
+   - Rename __db.1.abc → XXX.sqlite_stat1_00000.datas0
+   - Atomic: Either fully renamed or not at all
+  </div>
+
+  <h3>Why This Pattern?</h3>
+
+  <ul>
+    <li><strong>Atomicity:</strong> If crash during FOP, can retry or clean up temp files</li>
+    <li><strong>Crash safety:</strong> Rename is atomic on most filesystems — file either exists at new name or old name, never partially</li>
+    <li><strong>Logging:</strong> Each step is logged for recovery — can replay file creation even after crash</li>
+  </ul>
+
+  <h3>Transaction Wrapping</h3>
+
+  <p>FOPs are typically wrapped in a transaction:</p>
+
+  <div class="card">
+    <p>txnid 80000005:</p>
+    <ul>
+      <li>[1][10324] __fop_create (prevlsn [0][0])</li>
+      <li>[1][10384] __fop_write (prevlsn [1][10324])</li>
+      <li>[1][43228] __fop_write (prevlsn [1][10384])</li>
+      <li>[1][76072] __fop_rename (prevlsn [1][43228])</li>
+      <li>[1][76197] __txn_child → parent 80000004</li>
+      <li>[1][76253] __dbreg_register (prevlsn [1][76197])</li>
+      <li>[1][76378] __txn_regop (commit, prevlsn [1][76253])</li>
+    </ul>
+    <p>If any step fails, parent transaction aborts and all FOPs roll back.</p>
+  </div>
+
+</div>
+
+<!-- BTREE OPS -->
+<div class="section" id="btree-ops">
+  <h2>🌳 B-tree Operations</h2>
+
+  <p>B-tree operations modify the structure of indexes and data pages. They're carefully logged for crash recovery.</p>
+
+  <h3>Common B-tree Operations</h3>
+
+  <div class="table-wrap">
+    <table>
+      <tr>
+        <th>Operation</th>
+        <th>Rectype</th>
+        <th>Purpose</th>
+      </tr>
+      <tr>
+        <td><strong>__bam_split</strong></td>
+        <td>3062</td>
+        <td>Page became full; split into left/right children. Records old root and new children.</td>
+      </tr>
+      <tr>
+        <td><strong>__bam_rsplit</strong></td>
+        <td>3063</td>
+        <td>Page became sparse; merge with sibling. Rebalances tree.</td>
+      </tr>
+      <tr>
+        <td><strong>__bam_cdel</strong></td>
+        <td>3057</td>
+        <td>Cursor delete — mark record as logically deleted without removing immediately (for MVCC).</td>
+      </tr>
+      <tr>
+        <td><strong>__bam_repl</strong></td>
+        <td>3058</td>
+        <td>Replace record in place. Used for UPDATE where key doesn't change.</td>
+      </tr>
+      <tr>
+        <td><strong>__db_addrem</strong></td>
+        <td>3041</td>
+        <td>Add or remove record from page (building blocks for other ops).</td>
+      </tr>
+    </table>
+  </div>
+
+  <h3>B-tree Page Split Example</h3>
+
+  <div class="diagram">
+Before:
+  ┌──────────────────────────────────┐
+  │ Page 1 (ROOT)                    │
+  │ Keys: [10, 20, 30, 40, ...full]  │
+  └──────────────────────────────────┘
+
+Insertion of key 25 triggers split:
+  ↓
+Log __bam_split record:
+  - left: 2
+  - right: 3
+  - indx: 2 (split point)
+  ↓
+After:
+  ┌──────────────────┐
+  │ Page 1 (ROOT)    │
+  │ [20 | 30]        │  (now points to children)
+  └─────┬──────┬─────┘
+        │      │
+   ┌────┴────┐ ┌──────────┐
+   │ Page 2   │ │ Page 3   │
+   │[10,20]   │ │[30,40]   │
+   └──────────┘ └──────────┘
+
+During recovery: Replay __bam_split to restore tree structure
+  </div>
+
+  <h3>MVCC and Logical Deletes</h3>
+
+  <ul>
+    <li>DELETE doesn't immediately remove records (would require page reorganization)</li>
+    <li>Instead, __bam_cdel marks the record with a "deleted" flag</li>
+    <li>Readers at older snapshots still see the record; newer readers skip it</li>
+    <li>Periodically, vacuuming removes fully-dead records (committed delete + no active readers)</li>
+  </ul>
+
+</div>
+
+<!-- SUMMARY -->
+<div class="section">
+  <h2>Summary: The Big Picture</h2>
+
+  <div class="card">
+    <h4>WAL Guarantees Durability</h4>
+    <p>All changes are logged before applied. On crash, replay log from last checkpoint to recover.</p>
+  </div>
+
+  <div class="card">
+    <h4>LSNs Chain Records Chronologically</h4>
+    <p>Each record points to its predecessor (prevlsn), enabling efficient log replay and transaction rollback.</p>
+  </div>
+
+  <div class="card">
+    <h4>Checkpoints Enable Optimization</h4>
+    <p>Mark stable points on disk; truncate old log. Recovery starts from checkpoint, not log beginning.</p>
+  </div>
+
+  <div class="card">
+    <h4>Rep Gens Coordinate Replication</h4>
+    <p>Master elections increment rep_gen. Replicas use it to detect cluster topology changes and avoid conflicts.</p>
+  </div>
+
+  <div class="card">
+    <h4>Physical Logging + Logical Records</h4>
+    <p>Low-level B-tree ops are physical (page-level); schema/row ops are logical (intent-based) for flexibility.</p>
+  </div>
+
+  <div class="card">
+    <h4>Transactions Ensure Consistency</h4>
+    <p>Parent-child nesting, logical transactions, and UNDO phase on recovery maintain ACID properties.</p>
+  </div>
+
+</div>
+
+</div>
+
+<footer>
+  <p>Berkeley DB Write-Ahead Logging in Comdb2 — A Technical Reference</p>
+  <p style="font-size:.85em;margin-top:10px">For more on Comdb2, visit <a href="https://github.com/bloomberg/comdb2">github.com/bloomberg/comdb2</a></p>
+</footer>
+
+</body>
+</html>
